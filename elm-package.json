@@ -1,6 +1,6 @@
 {
     "version": "1.0.0",
-    "summary": "Pylon is a support library for making great applications against Firebase, written in Elm, and is to be used in conjunction with ElmFire.",
+    "summary": "Pylon is a support library for Firebase applications using ElmFire.",
     "repository": "https://github.com/williamwhitacre/pylon.git",
     "license": "BSD3",
     "source-directories": [
