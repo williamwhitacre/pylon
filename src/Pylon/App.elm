@@ -47,13 +47,18 @@ module Pylon.App
   , nilConfig
   , configWithOptions
 
-  , chain, chainFinalizingEach
+  , chain
+  , chainSub
+  , chainFinalizingEach
   , asEffector, mappedEffector
   , finalizedEffector
 
   , configOptions, configInit
   , configUpdateList, configUpdate
   , configStage, configPresent
+  , configInput
+  , configListInput
+  , configRawInput
 
   , promoteActions
   , handleErrors
@@ -106,8 +111,7 @@ Cumulatively build a configuration using this convenient DSL, starting either fr
 or starting from a `configWithOptions`. The latter can be very nice for flowing right in to building
 a configuration from building an `Options` struct.
 
-@docs nilConfig, configWithOptions, configOptions, configInit, configUpdateList, configUpdate, configStage, configPresent
-
+@docs nilConfig, configWithOptions, configOptions, configInit, configUpdateList, configUpdate, configStage, configPresent, configInput, configListInput, configRawInput
 
 # Chaining Effectors
 
@@ -119,7 +123,7 @@ possibly producing a number of tasks to execute. Such task lists can be either e
 by the user using `finalizeTasks`, or they can be converted to `ActionTask`s and returned to the
 top level, where the configured `Dispatch` method is used to run the tasks.
 
-@docs chain, chainFinalizingEach, asEffector, mappedEffector, finalizedEffector
+@docs chain, chainSub, chainFinalizingEach, asEffector, mappedEffector, finalizedEffector
 
 
 # Task Manipulation
@@ -257,6 +261,20 @@ chain functions data =
   |> \(data', taskLists) -> (data', List.concat taskLists)
 
 
+{-| Chain a list of effectors on a sub model. Provide a fetch and an update function to extract
+and replace the sub model, before and after executing the chain of effectors on the sub model
+respectively. -}
+chainSub
+  :  (modeltype -> innertype)
+  -> (innertype -> modeltype -> modeltype)
+  -> List (innertype -> (innertype, List (Task z r)))
+  -> modeltype
+  -> (modeltype, List (Task z r))
+chainSub fget fupdate functions data =
+  chain functions (fget data)
+  |> \(sub', tasks') -> (fupdate sub' data, tasks')
+
+
 {-| Chaining effectors, finalizing each resultant task list seperately using the given dispatch
 method. -}
 chainFinalizingEach : Dispatch -> List (modeltype -> (modeltype, List (Task z r))) -> modeltype -> (modeltype, List (FinalTask never))
@@ -342,6 +360,37 @@ configInit
 configInit finit config =
   { config
   | init = finit
+  }
+
+
+{-| Configure an input. -}
+configInput
+  :  (inputtype -> actiontype)
+  -> Signal inputtype
+  -> Config errortype modeltype actiontype viewtype
+  -> Config errortype modeltype actiontype viewtype
+configInput faction =
+  Signal.map (faction >> flip (::) []) >> configRawInput
+
+
+{-| Configure a list input. -}
+configListInput
+  :  (List inputtype -> List actiontype)
+  -> Signal (List inputtype)
+  -> Config errortype modeltype actiontype viewtype
+  -> Config errortype modeltype actiontype viewtype
+configListInput factions =
+  Signal.map factions >> configRawInput
+
+
+{-| Configure a raw input. -}
+configRawInput
+  :  Signal (List actiontype)
+  -> Config errortype modeltype actiontype viewtype
+  -> Config errortype modeltype actiontype viewtype
+configRawInput inputSignal config =
+  { config
+  | inputs = inputSignal :: config.inputs
   }
 
 

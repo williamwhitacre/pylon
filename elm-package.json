@@ -1,5 +1,5 @@
 {
-    "version": "1.0.0",
+    "version": "1.1.0",
     "summary": "Pylon is a support library for Firebase applications using ElmFire.",
     "repository": "https://github.com/williamwhitacre/pylon.git",
     "license": "BSD3",
@@ -7,11 +7,11 @@
         "./src"
     ],
     "exposed-modules": [
-      "Pylon.Resource",
-      "Pylon.App",
-      "Pylon.DB",
-      "Pylon.DB.Group",
-      "Pylon.DB.Meta"
+        "Pylon.Resource",
+        "Pylon.App",
+        "Pylon.DB",
+        "Pylon.DB.Group",
+        "Pylon.DB.Meta"
     ],
     "dependencies": {
         "Apanatshka/elm-signal-extra": "5.7.0 <= v < 6.0.0",
