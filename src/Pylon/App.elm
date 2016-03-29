@@ -72,7 +72,9 @@ module Pylon.App
   , thenDo
   , thenDoNothing
 
-  , doCycle, doSubCycle, run
+  , doCycle, run
+
+  , doSubUpdate, doSubStage, doSubPresent, doSubCycle
 
   ) where
 
@@ -141,7 +143,11 @@ from Pylon's predecessor Scaffold is not repeated.
 `run` will allow you to run an application given an initial model and view with a configuration.
 `doCycle` exposes the internal functionality used by run, with a little syntactic sugar.
 
-@docs doCycle, doSubCycle, run
+@docs doCycle, run
+
+
+# Manipulating Sub Models
+@docs doSubUpdate, doSubStage, doSubPresent, doSubCycle
 
 -}
 
@@ -545,6 +551,44 @@ doSubCycle config factionup address actions now inputs =
   |> \(result, subtasks') -> subtasks'
   |> List.map (promoteActions factionup)
   |> (,) result
+
+
+{-| Update a sub model. -}
+doSubUpdate
+  :  Config errortype modeltype actiontype viewtype
+  -> (List actiontype -> List outeraction)
+  -> List actiontype
+  -> Time -> modeltype
+  -> (modeltype, List (ActionTask errortype outeraction))
+doSubUpdate config factionup actions now =
+  config.update actions now
+  |> mappedEffector (List.map <| promoteActions factionup)
+
+
+{-| Stage a sub model. -}
+doSubStage
+  :  Config errortype modeltype actiontype viewtype
+  -> (List actiontype -> List outeraction)
+  -> Signal.Address (List outeraction)
+  -> Time -> modeltype
+  -> (modeltype, List (ActionTask errortype outeraction))
+doSubStage config factionup address now =
+  config.stage (Signal.forwardTo address factionup) now
+  |> mappedEffector (List.map <| promoteActions factionup)
+
+
+{-| Present a sub model. -}
+doSubPresent
+  :  Config errortype modeltype actiontype viewtype
+  -> (List actiontype -> List outeraction)
+  -> Signal.Address (List outeraction)
+  -> Time -> modeltype
+  -> (Maybe viewtype, List (ActionTask errortype outeraction))
+doSubPresent config factionup address now model =
+  config.present (Signal.forwardTo address factionup) now model
+  |> \(maybeView, subtasks') -> subtasks'
+  |> List.map (promoteActions factionup)
+  |> (,) maybeView
 
 
 doCycle_
