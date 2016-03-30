@@ -36,6 +36,7 @@ module Pylon.DB.Group
   , getGroupCurrentData
   , groupUpdateSub
   , groupDoSub
+  , groupDoEachSub
   , groupAddSub
   , groupRemoveSub
 
@@ -77,7 +78,7 @@ functionality to write new items in to a group. Take care, however, that you _do
 items form the group by using `groupRemoveSub` directly._ To effect the remote data, you must
 invoke the operations provided by `Pylon.DB`.
 
-@docs getGroupCurrentData, groupUpdateSub, groupDoSub, groupAddSub, groupRemoveSub
+@docs getGroupCurrentData, groupUpdateSub, groupDoSub, groupDoEachSub, groupAddSub, groupRemoveSub
 
 # Convenience Subtype DB.Binding Shortcuts
 @docs dataSubBinding, groupSubBinding
@@ -104,6 +105,7 @@ import ElmFire
 
 import Task exposing (Task, andThen, onError)
 import Dict exposing (Dict)
+import Set exposing (Set)
 
 
 --/----------------------\--
@@ -213,6 +215,25 @@ groupDoSub subDo key group =
         Dict.get key (getGroupCurrentData group)
         |> Maybe.map (doAt GroupSubD)
         |> Maybe.withDefault (group, [])
+
+
+{-| Perform groupDoSub at every existing key after deltas. -}
+groupDoEachSub : (subtype -> (subtype, List (DB.DBTask never))) -> Group subtype -> (Group subtype, List (DB.DBTask never))
+groupDoEachSub subDo group =
+  let
+    keys = Set.union
+      (group.dataDelta
+      |> Dict.filter (\key (data', deltaTag) -> deltaTag /= GroupRmD)
+      |> Dict.keys
+      |> Set.fromList)
+      (getGroupCurrentData group |> Dict.keys |> Set.fromList)
+
+  in
+    Set.foldr
+      (\key (group', tasks') -> groupDoSub subDo key group'
+      |> \(group_, tasks_) -> tasks_ ++ tasks'
+      |> (,) group_)
+      (group, []) keys
 
 
 {-| Add a sub item to the group. This is how you can write new data within a group. One should use
