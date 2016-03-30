@@ -202,12 +202,12 @@ type alias Options =
 
 {-| Configure an application. Sane defaults are provided so that you can construct as much or as
 little as you need using the provided DSL. -}
-type alias Config errortype modeltype actiontype viewtype =
-  { init : Time -> modeltype -> (modeltype, List (ActionTask errortype actiontype))
+type alias Config never modeltype actiontype viewtype =
+  { init : Time -> modeltype -> (modeltype, List (FinalTask never))
   , inputs : List (Signal (List actiontype))
-  , update : List actiontype -> Time -> modeltype -> (modeltype, List (ActionTask errortype actiontype))
-  , stage : Signal.Address (List actiontype) -> Time -> modeltype -> (modeltype, List (ActionTask errortype actiontype))
-  , present : Signal.Address (List actiontype) -> Time -> modeltype -> (Maybe viewtype, List (ActionTask errortype actiontype))
+  , update : List actiontype -> Time -> modeltype -> (modeltype, List (FinalTask never))
+  , stage : Signal.Address (List actiontype) -> Time -> modeltype -> (modeltype, List (FinalTask never))
+  , present : Signal.Address (List actiontype) -> Time -> modeltype -> (Maybe viewtype, List (FinalTask never))
   , options : Options
   }
 
@@ -243,7 +243,7 @@ optionsRunInputsOnStartup runInputsOnStartup options =
 
 
 {-| Empty configuration, providing all defaults and nil behavior. -}
-nilConfig : Config errortype modeltype actiontype viewtype
+nilConfig : Config never modeltype actiontype viewtype
 nilConfig =
   { init = (\now model -> (model, []))
   , inputs = []
@@ -255,7 +255,7 @@ nilConfig =
 
 
 {-| A nil configuration, with the given options set. -}
-configWithOptions : Options -> Config errortype modeltype actiontype viewtype
+configWithOptions : Options -> Config never modeltype actiontype viewtype
 configWithOptions options =
   configOptions options nilConfig
 
@@ -325,9 +325,9 @@ asEffector func data =
 
 {-| Add an update function which is aware of an entire atomic action list as it comes in. -}
 configUpdateList
-  :  (List actiontype -> Time -> modeltype -> (modeltype, List (ActionTask errortype actiontype)))
-  -> Config errortype modeltype actiontype viewtype
-  -> Config errortype modeltype actiontype viewtype
+  :  (List actiontype -> Time -> modeltype -> (modeltype, List (FinalTask never)))
+  -> Config never modeltype actiontype viewtype
+  -> Config never modeltype actiontype viewtype
 configUpdateList fupdatelist config =
   { config | update = fupdatelist }
 
@@ -335,9 +335,9 @@ configUpdateList fupdatelist config =
 {-| Add a classic single action update function, which is simpler and just as good for most use
 cases. -}
 configUpdate
-  :  (actiontype -> Time -> modeltype -> (modeltype, List (ActionTask errortype actiontype)))
-  -> Config errortype modeltype actiontype viewtype
-  -> Config errortype modeltype actiontype viewtype
+  :  (actiontype -> Time -> modeltype -> (modeltype, List (FinalTask never)))
+  -> Config never modeltype actiontype viewtype
+  -> Config never modeltype actiontype viewtype
 configUpdate fupdateone =
   let
     updateEach actionList now model =
@@ -354,15 +354,15 @@ configUpdate fupdateone =
 
 
 {-| Set some extra options on the configuration. -}
-configOptions : Options -> Config errortype modeltype actiontype viewtype -> Config errortype modeltype actiontype viewtype
+configOptions : Options -> Config never modeltype actiontype viewtype -> Config never modeltype actiontype viewtype
 configOptions options config = { config | options = options }
 
 
 {-| Set an initialization function on the app. -}
 configInit
-  :  (Time -> modeltype -> (modeltype, List (ActionTask errortype actiontype)))
-  -> Config errortype modeltype actiontype viewtype
-  -> Config errortype modeltype actiontype viewtype
+  :  (Time -> modeltype -> (modeltype, List (FinalTask never)))
+  -> Config never modeltype actiontype viewtype
+  -> Config never modeltype actiontype viewtype
 configInit finit config =
   { config
   | init = finit
@@ -373,8 +373,8 @@ configInit finit config =
 configInput
   :  (inputtype -> actiontype)
   -> Signal inputtype
-  -> Config errortype modeltype actiontype viewtype
-  -> Config errortype modeltype actiontype viewtype
+  -> Config never modeltype actiontype viewtype
+  -> Config never modeltype actiontype viewtype
 configInput faction =
   Signal.map (faction >> flip (::) []) >> configRawInput
 
@@ -383,8 +383,8 @@ configInput faction =
 configListInput
   :  (List inputtype -> List actiontype)
   -> Signal (List inputtype)
-  -> Config errortype modeltype actiontype viewtype
-  -> Config errortype modeltype actiontype viewtype
+  -> Config never modeltype actiontype viewtype
+  -> Config never modeltype actiontype viewtype
 configListInput factions =
   Signal.map factions >> configRawInput
 
@@ -392,8 +392,8 @@ configListInput factions =
 {-| Configure a raw input. -}
 configRawInput
   :  Signal (List actiontype)
-  -> Config errortype modeltype actiontype viewtype
-  -> Config errortype modeltype actiontype viewtype
+  -> Config never modeltype actiontype viewtype
+  -> Config never modeltype actiontype viewtype
 configRawInput inputSignal config =
   { config
   | inputs = inputSignal :: config.inputs
@@ -403,9 +403,9 @@ configRawInput inputSignal config =
 {-| Set a staging function on the app. Staging is done after all actions are passed through update,
 but before presentation. -}
 configStage
-  :  (Signal.Address (List actiontype) -> Time -> modeltype -> (modeltype, List (ActionTask errortype actiontype)))
-  -> Config errortype modeltype actiontype viewtype
-  -> Config errortype modeltype actiontype viewtype
+  :  (Signal.Address (List actiontype) -> Time -> modeltype -> (modeltype, List (FinalTask never)))
+  -> Config never modeltype actiontype viewtype
+  -> Config never modeltype actiontype viewtype
 configStage fstage config =
   { config
   | stage = fstage
@@ -415,9 +415,9 @@ configStage fstage config =
 {-| Set a presentation function on the app. This can optionally update the view of the application,
 or not by returning nothing. -}
 configPresent
-  :  (Signal.Address (List actiontype) -> Time -> modeltype -> (Maybe viewtype, List (ActionTask errortype actiontype)))
-  -> Config errortype modeltype actiontype viewtype
-  -> Config errortype modeltype actiontype viewtype
+  :  (Signal.Address (List actiontype) -> Time -> modeltype -> (Maybe viewtype, List (FinalTask never)))
+  -> Config never modeltype actiontype viewtype
+  -> Config never modeltype actiontype viewtype
 configPresent fpresent config =
   { config
   | present = fpresent
@@ -523,11 +523,11 @@ thenDoNothing = thenDo []
 
 {-| Perform a full cycle on a `(model, view)` pair, using the given application configuration. -}
 doCycle
-  :  Config errortype modeltype actiontype viewtype
+  :  Config never modeltype actiontype viewtype
   -> Signal.Address (List actiontype)
   -> List actiontype
   -> Time -> (modeltype, viewtype)
-  -> ((modeltype, viewtype), List (ActionTask errortype actiontype))
+  -> ((modeltype, viewtype), List (FinalTask never))
 doCycle config address actions now (model, view) =
   let
     ((model', maybeView'), tasks) =
@@ -541,63 +541,63 @@ doCycle config address actions now (model, view) =
 {-| Perform a full cycle with action promotion. Useful for nesting models. This is
 deliberately left very unambiguous to avoid obfuscation. -}
 doSubCycle
-  :  Config errortype modeltype actiontype viewtype
+  :  Config never modeltype actiontype viewtype
   -> (List actiontype -> List outeraction)
   -> Signal.Address (List outeraction)
   -> List actiontype
   -> Time -> (modeltype, viewtype)
-  -> ((modeltype, viewtype), List (ActionTask errortype outeraction))
+  -> ((modeltype, viewtype), List (FinalTask never))
 doSubCycle config factionup address actions now inputs =
   doCycle config (Signal.forwardTo address factionup) actions now inputs
   |> \(result, subtasks') -> subtasks'
-  |> List.map (promoteActions factionup)
+  |> finalizeTasks sequence
   |> (,) result
 
 
 {-| Update a sub model. -}
 doSubUpdate
-  :  Config errortype modeltype actiontype viewtype
+  :  Config never modeltype actiontype viewtype
   -> (List actiontype -> List outeraction)
   -> List actiontype
   -> Time -> modeltype
-  -> (modeltype, List (ActionTask errortype outeraction))
+  -> (modeltype, List (FinalTask never))
 doSubUpdate config factionup actions now =
   config.update actions now
-  |> mappedEffector (List.map <| promoteActions factionup)
+  |> mappedEffector (finalizeTasks sequence)
 
 
 {-| Stage a sub model. -}
 doSubStage
-  :  Config errortype modeltype actiontype viewtype
+  :  Config never modeltype actiontype viewtype
   -> (List actiontype -> List outeraction)
   -> Signal.Address (List outeraction)
   -> Time -> modeltype
-  -> (modeltype, List (ActionTask errortype outeraction))
+  -> (modeltype, List (FinalTask never))
 doSubStage config factionup address now =
   config.stage (Signal.forwardTo address factionup) now
-  |> mappedEffector (List.map <| promoteActions factionup)
+  |> mappedEffector (finalizeTasks sequence)
 
 
 {-| Present a sub model. -}
 doSubPresent
-  :  Config errortype modeltype actiontype viewtype
+  :  Config never modeltype actiontype viewtype
   -> (List actiontype -> List outeraction)
   -> Signal.Address (List outeraction)
   -> Time -> modeltype
-  -> (Maybe viewtype, List (ActionTask errortype outeraction))
+  -> (Maybe viewtype, List (FinalTask never))
 doSubPresent config factionup address now model =
   config.present (Signal.forwardTo address factionup) now model
   |> \(maybeView, subtasks') -> subtasks'
-  |> List.map (promoteActions factionup)
+  |> finalizeTasks sequence
   |> (,) maybeView
 
 
 doCycle_
-  :  Config errortype modeltype actiontype viewtype
+  :  Config never modeltype actiontype viewtype
   -> Signal.Address (List actiontype)
   -> List actiontype
   -> Time -> (modeltype, viewtype)
-  -> ((modeltype, Maybe viewtype), List (ActionTask errortype actiontype))
+  -> ((modeltype, Maybe viewtype), List (FinalTask never))
 doCycle_ config address actions now (model, view) =
   let
     (model', updateTasks) =
@@ -614,7 +614,7 @@ doCycle_ config address actions now (model, view) =
 
 {-| With the given configuration, start the application as in StartApp with the given initial model,
 and the given default view. -}
-run : Config errortype modeltype actiontype viewtype -> modeltype -> viewtype -> Output never modeltype viewtype
+run : Config never modeltype actiontype viewtype -> modeltype -> viewtype -> Output never modeltype viewtype
 run config model0 view0 =
   let
     { init, inputs, update, stage, present, options } =
