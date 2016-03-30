@@ -34,6 +34,8 @@ module Pylon.DB.Group
   , Group
 
   , getGroupCurrentData
+  , getGroupDeltaData
+
   , groupUpdateSub
   , groupDoSub
   , groupDoEachSub
@@ -71,6 +73,10 @@ or even a compatible API fitting the same pattern such that this system is easil
 # Types
 @docs GroupFeedback, GroupBinding, Group
 
+# Direct Group Inquiry
+
+@docs getGroupCurrentData, getGroupDeltaData
+
 # Direct Group Manipulation
 
 You can use these functions to perform nested operations on groups directly. You will need this
@@ -78,7 +84,7 @@ functionality to write new items in to a group. Take care, however, that you _do
 items form the group by using `groupRemoveSub` directly._ To effect the remote data, you must
 invoke the operations provided by `Pylon.DB`.
 
-@docs getGroupCurrentData, groupUpdateSub, groupDoSub, groupDoEachSub, groupAddSub, groupRemoveSub
+@docs groupUpdateSub, groupDoSub, groupDoEachSub, groupAddSub, groupRemoveSub
 
 # Convenience Subtype DB.Binding Shortcuts
 @docs dataSubBinding, groupSubBinding
@@ -157,6 +163,13 @@ deltas factored in. -}
 getGroupCurrentData : Group subtype -> Dict String subtype
 getGroupCurrentData =
   .data >> Resource.otherwise Dict.empty
+
+
+{-| Get the current change in the group's data. -}
+getGroupDeltaData : Group subtype -> Dict String (Maybe subtype)
+getGroupDeltaData =
+  .dataDelta
+  >> Dict.map (\_ (data', deltaTag) -> if deltaTag == GroupRmD then Nothing else Just data')
 
 
 groupRemoveExistingData : String -> Group subtype -> Group subtype
