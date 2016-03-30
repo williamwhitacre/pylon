@@ -437,7 +437,7 @@ promoteActions transform task =
 
 
 {-| Transform errors from the given task in to actions. -}
-handleErrors : (errortype -> List actiontype) -> ActionTask errortype actiontype -> ActionTask errortype actiontype
+handleErrors : (errortype -> List actiontype) -> ActionTask errortype actiontype -> ActionTask z actiontype
 handleErrors promote task =
   task `onError` (promote >> Task.succeed)
 
@@ -449,9 +449,10 @@ mapErrors transform task =
 
 
 {-| Forward the list of actions produced on the success of this task to the given address using the given transformation function. -}
-forwardActions : (List actiontype -> List actiontype') -> Signal.Address (List actiontype') -> ActionTask errortype actiontype -> ActionTask errortype actiontype
+forwardActions : (List actiontype -> List actiontype') -> Signal.Address (List actiontype') -> ActionTask errortype actiontype -> ActionTask errortype actiontype'
 forwardActions transform address task =
-  TaskEx.interceptSuccess (Signal.forwardTo address transform) task
+  promoteActions transform task
+  |> TaskEx.interceptSuccess address
 
 
 {-| Translate task error to a list of actions and send to the given address. -}
@@ -516,7 +517,7 @@ transforming tasks that need to be returned from the top level of the applicatio
 been finalized, so the types simply have to match. It should be noted that empty action lists do
 not trigger any update, staging, or presentation, and as such a busy loop caused by repeated
 dispatchment of empty action tasks will not occur. -}
-thenDoNothing : Task errortype r -> ActionTask errortype actiontype
+thenDoNothing : ActionTask errortype actiontype -> ActionTask errortype r
 thenDoNothing = thenDo []
 
 
