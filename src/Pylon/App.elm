@@ -517,7 +517,7 @@ transforming tasks that need to be returned from the top level of the applicatio
 been finalized, so the types simply have to match. It should be noted that empty action lists do
 not trigger any update, staging, or presentation, and as such a busy loop caused by repeated
 dispatchment of empty action tasks will not occur. -}
-thenDoNothing : ActionTask errortype actiontype -> ActionTask errortype r
+thenDoNothing : Task errortype r -> ActionTask errortype a
 thenDoNothing = thenDo []
 
 
