@@ -36,6 +36,9 @@ module Pylon.DB.Group
   , getGroupCurrentData
   , getGroupDeltaData
   , getGroupDataResDeltas
+  , getGroupDataResDeltaList
+  , groupDataResDeltaFoldL
+  , groupDataResDeltaFoldR
 
   , groupUpdateSub
   , groupDoSub
@@ -77,7 +80,7 @@ or even a compatible API fitting the same pattern such that this system is easil
 
 # Direct Group Inquiry
 
-@docs getGroupCurrentData, getGroupDeltaData, getGroupDataResDeltas, groupDeriveSub
+@docs getGroupCurrentData, getGroupDeltaData, getGroupDataResDeltas, getGroupDataResDeltaList, groupDataResDeltaFoldL, groupDataResDeltaFoldR, groupDeriveSub
 
 # Direct Group Manipulation
 
@@ -177,8 +180,31 @@ getGroupDeltaData =
 {-| Get the current change in the group's data as a dictionary of resource pairs, each representing
 the prior and current values of the data respectively. -}
 getGroupDataResDeltas : Group (DB.Data v) -> Dict String (Resource DB.DBError v, Resource DB.DBError v)
-getGroupDataResDeltas group =
+getGroupDataResDeltas =
+  groupDataResDeltaFoldL Dict.insert Dict.empty
+
+
+{-| Get the current change in the group's data as a list of (key, (prior, current)) structures. -}
+getGroupDataResDeltaList : Group (DB.Data v) -> List (String, (Resource DB.DBError v, Resource DB.DBError v))
+getGroupDataResDeltaList =
+  groupDataResDeltaFoldR (\key pair list -> (key, pair) :: list) []
+
+
+{-| Fold from the left across the deltas, using a particular fold function and initial output. -}
+groupDataResDeltaFoldL : (String -> (Resource DB.DBError v, Resource DB.DBError v) -> foldout -> foldout) -> foldout -> Group (DB.Data v) -> foldout
+groupDataResDeltaFoldL = groupDataResDeltaFold False
+
+
+{-| Fold from the right across the deltas, using a particular fold function and initial output. -}
+groupDataResDeltaFoldR : (String -> (Resource DB.DBError v, Resource DB.DBError v) -> foldout -> foldout) -> foldout -> Group (DB.Data v) -> foldout
+groupDataResDeltaFoldR = groupDataResDeltaFold True
+
+
+groupDataResDeltaFold : Bool -> (String -> (Resource DB.DBError v, Resource DB.DBError v) -> foldout -> foldout) -> foldout -> Group (DB.Data v) -> foldout
+groupDataResDeltaFold fromRight fFold foldIn group =
   let
+    foldOp = if fromRight then Dict.foldr else Dict.foldl
+
     priorData = getGroupCurrentData group
 
     priorValueOf key =
@@ -186,14 +212,17 @@ getGroupDataResDeltas group =
         Just prior -> prior.value
         Nothing -> Resource.void
 
-    deltaPairOf key (data', deltaTag) =
-      case deltaTag of
+    deltaPairOf key (data', deltaTag) foldOut =
+      (case deltaTag of
         GroupRmD  -> (priorValueOf key, Resource.void)
         GroupSubD -> (priorValueOf key, data'.value)
-        GroupAddD -> (priorValueOf key, data'.value)
+        GroupAddD -> (priorValueOf key, data'.value))
+      |> \pair -> case pair of
+        (Resource.Void, Resource.Void) -> foldOut
+        _ -> fFold key pair foldOut
 
   in
-    Dict.map deltaPairOf group.dataDelta
+    foldOp deltaPairOf foldIn group.dataDelta
 
 
 groupRemoveExistingData : String -> Group subtype -> Group subtype
