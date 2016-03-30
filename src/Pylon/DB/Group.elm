@@ -35,6 +35,7 @@ module Pylon.DB.Group
 
   , getGroupCurrentData
   , getGroupDeltaData
+  , getGroupDataResDeltas
 
   , groupUpdateSub
   , groupDoSub
@@ -76,7 +77,7 @@ or even a compatible API fitting the same pattern such that this system is easil
 
 # Direct Group Inquiry
 
-@docs getGroupCurrentData, getGroupDeltaData, groupDeriveSub
+@docs getGroupCurrentData, getGroupDeltaData, getGroupDataResDeltas, groupDeriveSub
 
 # Direct Group Manipulation
 
@@ -171,6 +172,21 @@ getGroupDeltaData : Group subtype -> Dict String (Maybe subtype)
 getGroupDeltaData =
   .dataDelta
   >> Dict.map (\_ (data', deltaTag) -> if deltaTag == GroupRmD then Nothing else Just data')
+
+
+{-| Get the current change in the group's data as a dictionary of resource pairs, each representing
+the prior and current values of the data respectively. -}
+getGroupDataResDeltas : Group (DB.Data v) -> Dict String (Resource DB.DBError v, Resource DB.DBError v)
+getGroupDataResDeltas group =
+  let
+    deltaPairOf (data', deltaTag) =
+      case deltaTag of
+        GroupRmD  -> (data'.value, Resource.void)
+        GroupSubD -> (data'.priorValue, data'.value)
+        GroupAddD -> (data'.priorValue, data'.value)
+
+  in
+    Dict.map (always deltaPairOf) group.dataDelta
 
 
 groupRemoveExistingData : String -> Group subtype -> Group subtype

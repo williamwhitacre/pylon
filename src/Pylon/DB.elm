@@ -212,7 +212,7 @@ newData : Data v
 newData =
   { subscription = Resource.unknown
   , value = Resource.unknown
-  , priorValue = Resource.unknown
+  , priorValue = Resource.void
   , lastFailed = Nothing
   , queue = []
   }
@@ -537,7 +537,7 @@ doTransform binding reduction data =
     (if Resource.isVoid res' then
       doOperation binding opDelete data
     else
-      (,) { data | value = res' } [])
+      (,) { data | value = res', priorValue = data.value } [])
 
 
 {-| Add an operation to the queue. -}
