@@ -179,14 +179,21 @@ the prior and current values of the data respectively. -}
 getGroupDataResDeltas : Group (DB.Data v) -> Dict String (Resource DB.DBError v, Resource DB.DBError v)
 getGroupDataResDeltas group =
   let
-    deltaPairOf (data', deltaTag) =
+    priorData = getGroupCurrentData group
+
+    priorValueOf key =
+      case Dict.get key priorData of
+        Just prior -> prior.value
+        Nothing -> Resource.void
+
+    deltaPairOf key (data', deltaTag) =
       case deltaTag of
-        GroupRmD  -> (data'.value, Resource.void)
-        GroupSubD -> (data'.priorValue, data'.value)
-        GroupAddD -> (data'.priorValue, data'.value)
+        GroupRmD  -> (priorValueOf key, Resource.void)
+        GroupSubD -> (priorValueOf key, data'.value)
+        GroupAddD -> (priorValueOf key, data'.value)
 
   in
-    Dict.map (always deltaPairOf) group.dataDelta
+    Dict.map deltaPairOf group.dataDelta
 
 
 groupRemoveExistingData : String -> Group subtype -> Group subtype
