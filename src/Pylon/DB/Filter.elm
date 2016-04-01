@@ -197,7 +197,7 @@ filterMirror : (String -> rectype -> doctype) -> DB.Group (DB.Data rectype) -> F
 filterMirror mirror group (FilterState filterConfig priorState as priorShell) =
   let
     toDoc key dat whc = Resource.therefore (mirror key) (whc dat)
-    docPair key dat = toDoc key dat |> \f -> (f snd, f fst)
+    docPair key dat = toDoc key dat |> \f -> (f fst, f snd)
 
   in
     DB.groupDataResDeltaFoldR
