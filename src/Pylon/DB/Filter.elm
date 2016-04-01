@@ -328,11 +328,10 @@ filterDelta__ key (priorDocRes, currDocRes) (FilterState config priorState as pr
     maybeIndex' =
       case (priorDocRes, currDocRes) of
         (Resource.Known doc0, Resource.Known doc1) ->
-          Debug.log "Replacing Document" (doc0, doc1)
-          |> \_ -> ElmTextSearch.remove doc0 index
-          |> flip Result.andThen (ElmTextSearch.add doc1)
-          |> Result.map (\index_ -> Debug.log "Replaced Document" (doc0, doc1) |> \_ -> index_)
-          |> Result.formatError ((,) (doc0, doc1) >> Debug.log "Failed Replaing Document")
+          Debug.log "Updating Document" (doc0, doc1)
+          |> \_ -> ElmTextSearch.update doc1 index
+          |> Result.map (\index_ -> Debug.log "Updated Document" (doc0, doc1) |> \_ -> index_)
+          |> Result.formatError ((,) (doc0, doc1) >> Debug.log "Failed Updating Document")
           |> Result.toMaybe
 
         (_, Resource.Known doc) ->
