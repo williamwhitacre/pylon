@@ -35,6 +35,7 @@ module Pylon.DB.Mirror
   , deltas
   , commit
   , attach
+  , forward
   ) where
 
 {-| A binding for ElmTextSearch and Pylon.DB.Group.
@@ -49,7 +50,7 @@ module Pylon.DB.Mirror
 @docs refs, changedRefs, deltas
 
 # Group Mirroring
-@docs attach
+@docs attach, forward
 
 # Integration
 @docs commit
@@ -130,6 +131,20 @@ attach mirror group (MirrorState priorState as priorShell) =
       (\key -> docPair key >> mirrorDelta__ key)
       priorShell
       group
+
+
+{-| Forward deltas from one mirror to another. -}
+forward : (String -> doctype -> doctype') -> Mirror doctype -> Mirror doctype' -> Mirror doctype'
+forward mirror (MirrorState sourceState as sourceShell) (MirrorState priorState as priorShell) =
+  let
+    toDoc key dat whc = Resource.therefore (mirror key) (whc dat)
+    docPair key dat = toDoc key dat |> \f -> (f fst, f snd)
+
+  in
+    Dict.foldr
+      (\key -> flip (List.foldr (docPair key >> mirrorDelta__ key)))
+      priorShell
+      sourceState.deltas
 
 
 updateMirrorDeltas__ : String -> (Resource DB.DBError doctype, Resource DB.DBError doctype) -> Mirror doctype -> Mirror doctype
