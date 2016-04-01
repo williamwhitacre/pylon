@@ -48,7 +48,9 @@ module Pylon.App
   , configWithOptions
 
   , chain
+  , chainIf
   , chainSub
+  , chainSubIf
   , chainFinalizingEach
   , asEffector, mappedEffector
   , finalizedEffector
@@ -125,7 +127,7 @@ possibly producing a number of tasks to execute. Such task lists can be either e
 by the user using `finalizeTasks`, or they can be converted to `ActionTask`s and returned to the
 top level, where the configured `Dispatch` method is used to run the tasks.
 
-@docs chain, chainSub, chainFinalizingEach, asEffector, mappedEffector, finalizedEffector
+@docs chain, chainIf, chainSub, chainSubIf, chainFinalizingEach, asEffector, mappedEffector, finalizedEffector
 
 
 # Task Manipulation
@@ -267,6 +269,15 @@ chain functions data =
   |> \(data', taskLists) -> (data', List.concat taskLists)
 
 
+{-| Conditionally chain some effectors. -}
+chainIf : (modeltype -> Bool) -> List (modeltype -> (modeltype, List (Task z r))) -> modeltype -> (modeltype, List (Task z r))
+chainIf predicate functions data =
+  if predicate data then
+    chain functions data
+  else
+    (data, [])
+
+
 {-| Chain a list of effectors on a sub model. Provide a fetch and an update function to extract
 and replace the sub model, before and after executing the chain of effectors on the sub model
 respectively. -}
@@ -279,6 +290,21 @@ chainSub
 chainSub fget fupdate functions data =
   chain functions (fget data)
   |> \(sub', tasks') -> (fupdate sub' data, tasks')
+
+
+{-| Conditionally subchain some effectors. -}
+chainSubIf
+  :  (modeltype -> Bool)
+  -> (modeltype -> innertype)
+  -> (innertype -> modeltype -> modeltype)
+  -> List (innertype -> (innertype, List (Task z r)))
+  -> modeltype
+  -> (modeltype, List (Task z r))
+chainSubIf predicate fget fupdate functions data =
+  if predicate data then
+    chainSub fget fupdate functions data
+  else
+    (data, [])
 
 
 {-| Chaining effectors, finalizing each resultant task list seperately using the given dispatch
