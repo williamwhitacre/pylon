@@ -1,5 +1,5 @@
 {
-    "version": "4.8.0",
+    "version": "4.9.0",
     "summary": "Pylon is a support library for Firebase applications using ElmFire.",
     "repository": "https://github.com/williamwhitacre/pylon.git",
     "license": "BSD3",
@@ -12,11 +12,11 @@
         "Pylon.DB",
         "Pylon.DB.Group",
         "Pylon.DB.Meta",
-        "Pylon.DB.Filter"
+        "Pylon.DB.Filter",
+        "Pylon.DB.Mirror"
     ],
     "dependencies": {
         "Apanatshka/elm-signal-extra": "5.7.0 <= v < 6.0.0",
-        "NoRedInk/elm-lazy-list": "2.0.0 <= v < 3.0.0",
         "NoRedInk/elm-task-extra": "1.0.1 <= v < 2.0.0",
         "ThomasWeiser/elmfire": "1.0.5 <= v < 2.0.0",
         "elm-lang/core": "3.0.0 <= v < 4.0.0",
