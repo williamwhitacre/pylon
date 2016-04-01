@@ -160,6 +160,12 @@ filterQuery query (FilterState filterConfig priorState as priorShell) =
     priorShell
 
 
+{-| Set a new query conditionally. -}
+filterQueryIf : (String -> Bool) -> String -> Filter doctype -> Filter doctype
+filterQueryIf validator query =
+  if validator query then filterQuery query else identity
+
+
 {-| Get the latest filter query. -}
 getFilterQuery : Filter doctype -> String
 getFilterQuery (FilterState filterConfig priorState) =
