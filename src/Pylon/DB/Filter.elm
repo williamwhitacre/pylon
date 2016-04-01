@@ -34,6 +34,7 @@ module Pylon.DB.Filter
 
   , filter
   , filterQuery
+  , filterQueryIf
 
   , getFilterQuery
   , getFilterResults
@@ -53,7 +54,10 @@ module Pylon.DB.Filter
 @docs Filter, FilterFeedback, Document
 
 # Construction
-@docs filter, filterQuery
+@docs filter
+
+# Query
+@docs filterQuery, filterQueryIf
 
 # Getters
 @docs getFilterQuery, getFilterResults, getLastFilterResults
