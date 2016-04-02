@@ -46,6 +46,7 @@ module Pylon.DB.Group
   , groupAddSub
   , groupRemoveSub
   , groupDeriveSub
+  , getGroupSubData
 
   , dataSubBinding
   , groupSubBinding
@@ -83,7 +84,7 @@ or even a compatible API fitting the same pattern such that this system is easil
 
 # Direct Group Inquiry
 
-@docs getGroupCurrentData, getGroupDeltaData, getGroupDataResDeltas, getGroupDataResDeltaList, groupDataResDeltaFoldL, groupDataResDeltaFoldR, groupDeriveSub
+@docs getGroupCurrentData, getGroupDeltaData, getGroupDataResDeltas, getGroupDataResDeltaList, groupDataResDeltaFoldL, groupDataResDeltaFoldR, groupDeriveSub, getGroupSubData
 
 # Direct Group Manipulation
 
@@ -254,6 +255,13 @@ groupDeriveSub derived key group =
       Dict.get key (getGroupCurrentData group)
       |> Maybe.map (\data -> derived data |> Just)
       |> Maybe.withDefault Nothing
+
+
+{-| -}
+getGroupSubData : String -> Group (DB.Data v) -> Resource DB.DBError v
+getGroupSubData key group =
+  groupDeriveSub .value key group
+  |> Maybe.withDefault Resource.void
 
 
 {-| Update the item at the given key using a transformation function. This can be used to nest the
