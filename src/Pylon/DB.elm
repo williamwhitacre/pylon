@@ -72,6 +72,7 @@ module Pylon.DB
   , flushQueue
   , doOperation
   , doRetry
+  , doOperationSimple
   ) where
 
 {-| High level 2-way data binding against Firebase using ElmFire. For 2-way binding of arbitrary,
@@ -98,7 +99,7 @@ backends is planned, but not promised.
 @docs getResource, getPriorResource, getLastFailed
 
 # Operate on Data
-@docs doOperationIf, doMap, doTransform, enqueueOperation, flushQueue, doOperation, doRetry
+@docs doOperationIf, doMap, doTransform, enqueueOperation, flushQueue, doOperation, doRetry, doOperationSimple
 
 -}
 
@@ -591,6 +592,33 @@ updatedChildren_ : Config v -> Resource DBError v -> v -> (Bool, Json.Encode.Val
 updatedChildren_ config curr next =
   Resource.therefore (flip (updatedChildren_' config) next >> (,) True) curr
   |> Resource.otherwise (False, config.encoder next)
+
+
+{-| Dispatch the given operation without binding to data. -}
+doOperationSimple : ElmFire.Location -> Config v -> Operation v -> List (DBTask never)
+doOperationSimple loc config op =
+  case op of
+    Set value' ->
+      ElmFire.set (config.encoder value') loc
+      |> App.finalizeTask
+
+    SetAndPrioritize value' priority ->
+      ElmFire.setWithPriority (config.encoder value') priority loc
+      |> App.finalizeTask
+
+    Prioritize priority ->
+      ElmFire.setPriority priority loc
+      |> App.finalizeTask
+
+    UpdateChildren value' ->
+      Debug.crash "UpdateChildren is not implemented for doOperationSimple"
+
+    SetOrUpdateChildren value' ->
+      Debug.crash "SetOrUpdateChildren is not implemented for doOperationSimple"
+
+    Delete ->
+      ElmFire.remove loc
+      |> App.finalizeTask
 
 
 {-| Dispatch the given operation immediately on a bound `Data` record. -}
