@@ -49,6 +49,8 @@ module Pylon.DB.Group
 
   , dataSubBinding
   , groupSubBinding
+  , dataRebasedBinding
+  , groupRebasedBinding
 
   , bindingGroupTo
   , orderGroupBy
@@ -69,6 +71,7 @@ module Pylon.DB.Group
   , groupDataInput
   , cancelDataGroup
   , cancelAndResetDataGroup
+  , groupRebasedDataSubscriber
   , groupDataSubscriber
   ) where
 
@@ -91,8 +94,8 @@ invoke the operations provided by `Pylon.DB`.
 
 @docs groupUpdateSub, groupDoSub, groupDoEachSub, groupAddSub, groupRemoveSub
 
-# Convenience Subtype DB.Binding Shortcuts
-@docs dataSubBinding, groupSubBinding
+# Convenience Sub-Binding Shortcuts
+@docs dataSubBinding, groupSubBinding, dataRebasedBinding, groupRebasedBinding
 
 # DB.Binding Construction
 @docs bindingGroupTo, orderGroupBy, sendingGroupTo, forwardingGroupTo
@@ -103,8 +106,8 @@ invoke the operations provided by `Pylon.DB`.
 # Raw Group Operations
 @docs groupInputOne, groupInput, cancelGroup, resetGroup, cancelAndResetGroup, groupSubscriber
 
-# DB.Data Group Convenience Operations
-@docs groupDataInputOne, groupDataInput, cancelDataGroup, cancelAndResetDataGroup, groupDataSubscriber
+# DB.Data Group Convenience
+@docs groupDataInputOne, groupDataInput, cancelDataGroup, cancelAndResetDataGroup, groupDataSubscriber, groupRebasedDataSubscriber
 
 -}
 
@@ -344,33 +347,6 @@ groupRemoveSub key group =
       |> Maybe.withDefault group
 
 
-{-groupSubscribeSub : (String -> subbinding) -> (subbinding -> subtype -> (subtype, List (DB.DBTask never))) -> String -> Group subtype -> (Group subtype, List (DB.DBTask never))
-groupSubscribeSub subBindingOf subSubscribe key =
-  groupDoSub (subSubscribe <| subBindingOf key) key
-
-
-groupCancelRemovedSub : (subtype -> (subtype, List ))-}
-
-{-| A convenience function which makes it a little bit easier to declare a sub-binding function for
-concrete data. Note that if you are using the `groupDataSubscriber` convenience function, then this
-is already invoked internally, making the task of bindin a group of concrete records even easier. -}
-dataSubBinding : DB.Config v -> GroupBinding (DB.Feedback v) -> String -> DB.Binding v
-dataSubBinding config groupBinding key =
-  ElmFire.sub key groupBinding.location
-  |> DB.bindingFrom config
-  |> DB.forwardingTo (List.map <| GroupSub key) groupBinding.address
-
-
-{-| A convenience function which makes it a little bit easier to declare a sub-binding function for
-nested groups. -}
-groupSubBinding : ElmFire.OrderOptions -> GroupBinding (GroupFeedback subfeedback') -> String -> GroupBinding subfeedback'
-groupSubBinding ordering groupBinding key =
-  ElmFire.sub key groupBinding.location
-  |> bindingGroupTo
-  |> orderGroupBy ordering
-  |> forwardingGroupTo (List.map <| GroupSub key) groupBinding.address
-
-
 groupDrain__ : Signal.Mailbox (List (GroupFeedback subfeedback))
 groupDrain__ = Signal.mailbox []
 
@@ -433,6 +409,7 @@ voidGroup =
 
   , currentLocation = Nothing
   }
+
 
 
 {-| Group feedback update function accepting one `DB.Feedback`. -}
@@ -636,13 +613,56 @@ integrateGroup_ cancelSub subscribeSub newLocation priorGroup =
       (group, App.finalizeTasks App.sequence cancelResetTasks)
 
 
+{-| A convenience function which makes it a little bit easier to declare a sub-binding function for
+concrete data. Note that if you are using the `groupDataSubscriber` convenience function, then this
+is already invoked internally, making the task of bindin a group of concrete records even easier. -}
+dataSubBinding : DB.Config v -> GroupBinding (DB.Feedback v) -> String -> DB.Binding v
+dataSubBinding config groupBinding key =
+  ElmFire.sub key groupBinding.location
+  |> DB.bindingFrom config
+  |> DB.forwardingTo (List.map <| GroupSub key) groupBinding.address
+
+
+{-| A convenience function which makes it a little bit easier to declare a sub-binding function for
+nested groups. -}
+groupSubBinding : ElmFire.OrderOptions -> GroupBinding (GroupFeedback subfeedback') -> String -> GroupBinding subfeedback'
+groupSubBinding ordering groupBinding key =
+  ElmFire.sub key groupBinding.location
+  |> bindingGroupTo
+  |> orderGroupBy ordering
+  |> forwardingGroupTo (List.map <| GroupSub key) groupBinding.address
+
+
 {-| Convenience function that makes it easier to bind a `Group (DB.Data v)`. -}
 groupDataSubscriber : DB.Config v -> GroupBinding (DB.Feedback v) -> Group (DB.Data v) -> (Group (DB.Data v), List (DB.DBTask never))
 groupDataSubscriber config =
   groupSubscriber DB.cancel DB.subscribe (dataSubBinding config)
 
 
--- TODO write a better nested subscriber
+
+{-| Rebased binding uses the key of the discovered item to get a child at a diffeent location than
+that of the group binding. A good example would be a subscription that tracks a group of users,
+but actually pulls data from a global profiles list. -}
+dataRebasedBinding : ElmFire.Location -> DB.Config v -> GroupBinding (DB.Feedback v) -> String -> DB.Binding v
+dataRebasedBinding base config groupBinding key =
+  ElmFire.sub key base
+  |> DB.bindingFrom config
+  |> DB.forwardingTo (List.map <| GroupSub key) groupBinding.address
+
+
+{-| Rebased binding for nested groups. -}
+groupRebasedBinding : ElmFire.Location -> ElmFire.OrderOptions -> GroupBinding (GroupFeedback subfeedback') -> String -> GroupBinding subfeedback'
+groupRebasedBinding base ordering groupBinding key =
+  ElmFire.sub key base
+  |> bindingGroupTo
+  |> orderGroupBy ordering
+  |> forwardingGroupTo (List.map <| GroupSub key) groupBinding.address
+
+
+{-| Convenience function that makes it easier to bind a `Group (DB.Data v)`. -}
+groupRebasedDataSubscriber : ElmFire.Location -> DB.Config v -> GroupBinding (DB.Feedback v) -> Group (DB.Data v) -> (Group (DB.Data v), List (DB.DBTask never))
+groupRebasedDataSubscriber base config =
+  groupSubscriber DB.cancel DB.subscribe (dataRebasedBinding base config)
 
 
 {-| Subscribe to a group, such that members will be automatically added and removed on synchronization

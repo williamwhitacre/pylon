@@ -41,6 +41,7 @@ module Pylon.DB.Filter
   , getLastFilterResults
 
   , filterMirror
+  , filterMirror'
 
   , filterInputOne
   , filterSync
@@ -63,7 +64,7 @@ module Pylon.DB.Filter
 @docs getFilterQuery, getFilterResults, getLastFilterResults
 
 # Group Mirroring
-@docs filterMirror
+@docs filterMirror, filterMirror'
 
 # Update
 @docs filterInputOne
@@ -76,6 +77,7 @@ import Pylon.App as App
 
 import Pylon.DB as DB
 import Pylon.DB.Group as DB
+import Pylon.DB.Mirror as Mirror exposing (Mirror)
 
 import Pylon.Resource as Resource exposing (Resource)
 
@@ -190,6 +192,20 @@ getLastFilterResults (FilterState filterConfig priorState) =
 
   in
     if seqNo > -1 then Just list else Nothing
+
+
+{-| Synchronize the document store with the contents of a mirror. -}
+filterMirror' : (String -> rectype -> doctype) -> Mirror rectype -> Filter doctype -> Filter doctype
+filterMirror' mirror source (FilterState filterConfig priorState as priorShell) =
+  let
+    toDoc key dat whc = Resource.therefore (mirror key) (whc dat)
+    docPair key dat = toDoc key dat |> \f -> (f fst, f snd)
+
+  in
+    Dict.foldr
+      (\key -> flip (List.foldr (docPair key >> filterDelta__ key)))
+      priorShell
+      (Mirror.deltas source)
 
 
 {-| Synchronize the document store with the contents of a DB group. -}

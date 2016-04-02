@@ -119,7 +119,7 @@ commit (MirrorState priorState as priorShell) =
     MirrorState { priorState | deltas = Dict.empty, resultRefs = priorState.resultRefs_ }
 
 
-{-| Synchronize the document store with the contents of a DB group. -}
+{-| Mirror a DB group. -}
 attach : (String -> rectype -> doctype) -> DB.Group (DB.Data rectype) -> Mirror doctype -> Mirror doctype
 attach mirror group (MirrorState priorState as priorShell) =
   let
