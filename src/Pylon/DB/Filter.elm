@@ -334,6 +334,11 @@ filterAsync address priorShell =
     |> Maybe.withDefault (shell, [ ])
 
 
+debugLogIf : Bool -> String -> a -> a
+debugLogIf b s =
+  if b then Debug.log s else identity
+
+
 
 filterDelta__ : String -> (Resource DB.DBError doctype, Resource DB.DBError doctype) -> Filter doctype -> Filter doctype
 filterDelta__ key (priorDocRes, currDocRes) (FilterState config priorState as priorShell) =
@@ -341,27 +346,29 @@ filterDelta__ key (priorDocRes, currDocRes) (FilterState config priorState as pr
     resultRefs = priorState.resultRefs_
     index = priorState.index_
 
+    debugMode = False
+
     maybeIndex' =
       case (priorDocRes, currDocRes) of
         (Resource.Known doc0, Resource.Known doc1) ->
-          Debug.log "Updating Document" (doc0, doc1)
+          debugLogIf debugMode "Updating Document" (doc0, doc1)
           |> \_ -> ElmTextSearch.remove doc0 index
           |> Result.withDefault index
           |> ElmTextSearch.add doc1
-          |> Result.map (\index_ -> Debug.log "Updated Document" (doc0, doc1) |> \_ -> index_)
-          |> Result.formatError ((,) (doc0, doc1) >> Debug.log "Failed Updating Document")
+          |> Result.map (\index_ -> debugLogIf debugMode "Updated Document" (doc0, doc1) |> \_ -> index_)
+          |> Result.formatError ((,) (doc0, doc1) >> debugLogIf debugMode "Failed Updating Document")
           |> Result.toMaybe
 
         (_, Resource.Known doc) ->
-          ElmTextSearch.add (Debug.log "Adding Document" doc) index
-          |> Result.map (\index_ -> Debug.log "Added Document" doc |> \_ -> index_)
-          |> Result.formatError ((,) doc >> Debug.log "Failed Adding Document")
+          ElmTextSearch.add (debugLogIf debugMode "Adding Document" doc) index
+          |> Result.map (\index_ -> debugLogIf debugMode "Added Document" doc |> \_ -> index_)
+          |> Result.formatError ((,) doc >> debugLogIf debugMode "Failed Adding Document")
           |> Result.toMaybe
 
         (Resource.Known doc, _) ->
-          ElmTextSearch.remove (Debug.log "Removing Document" doc) index
-          |> Result.map (\index_ -> Debug.log "Removed Document" doc |> \_ -> index_)
-          |> Result.formatError ((,) doc >> Debug.log "Failed Removing Document")
+          ElmTextSearch.remove (debugLogIf debugMode "Removing Document" doc) index
+          |> Result.map (\index_ -> debugLogIf debugMode "Removed Document" doc |> \_ -> index_)
+          |> Result.formatError ((,) doc >> debugLogIf debugMode "Failed Removing Document")
           |> Result.toMaybe
 
         _ -> Nothing
