@@ -52,8 +52,11 @@ module Pylon.App
   , chainSub
   , chainSubIf
   , chainFinalizingEach
-  , asEffector, mappedEffector, noEffect
   , finalizedEffector
+  , asEffector
+  , mappedEffector
+  , noEffect
+  , doEffect
 
   , configOptions, configInit
   , configUpdateList, configUpdate
@@ -127,7 +130,7 @@ possibly producing a number of tasks to execute. Such task lists can be either e
 by the user using `finalizeTasks`, or they can be converted to `ActionTask`s and returned to the
 top level, where the configured `Dispatch` method is used to run the tasks.
 
-@docs chain, chainIf, chainSub, chainSubIf, chainFinalizingEach, asEffector, mappedEffector, noEffect, finalizedEffector
+@docs chain, chainIf, chainSub, chainSubIf, chainFinalizingEach, asEffector, mappedEffector, noEffect, doEffect, finalizedEffector
 
 
 # Task Manipulation
@@ -347,6 +350,12 @@ finalizedEffector mode effector data =
 asEffector : (modeltype -> modeltype) -> modeltype -> (modeltype, List (Task z r))
 asEffector func data =
   (func data, [])
+
+
+{-| This gives you a simple way of emitting effects in a chain without changing the model. -}
+doEffect : (modeltype -> List (Task z r)) -> modeltype -> (modeltype, List (Task z r))
+doEffect feffect data =
+  (data, feffect data)
 
 
 {-| An effector that does nothing and produces no tasks. Useful as a placeholder when no action
