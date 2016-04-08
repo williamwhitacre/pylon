@@ -34,6 +34,7 @@ module Pylon.DB.Mirror
   , changedRefs
   , deltas
   , commit
+  , refresh
   , attach
   , forward
   ) where
@@ -50,7 +51,7 @@ module Pylon.DB.Mirror
 @docs refs, changedRefs, deltas
 
 # Group Mirroring
-@docs attach, forward
+@docs refresh, attach, forward
 
 # Integration
 @docs commit
@@ -62,6 +63,7 @@ import Pylon.DB.Group as DB
 import Pylon.Resource as Resource exposing (Resource)
 
 import Dict exposing (Dict)
+import Set exposing (Set)
 
 
 type alias MirrorState_ doctype =
@@ -69,6 +71,7 @@ type alias MirrorState_ doctype =
   , resultRefs_ : Dict String doctype
 
   , deltas : Dict String (List (Resource DB.DBError doctype, Resource DB.DBError doctype))
+  , refresh : Set String
   }
 
 
@@ -83,6 +86,7 @@ newState__ =
   , resultRefs_ = Dict.empty
 
   , deltas = Dict.empty
+  , refresh = Set.empty
   }
 
 
@@ -110,6 +114,18 @@ deltas (MirrorState priorState) =
   priorState.deltas
 
 
+{-| Forcibly refresh the mirrored data for a particular key. -}
+refresh : List String -> Mirror doctype -> Mirror doctype
+refresh keys priorShell =
+  List.foldl
+    (\key (MirrorState state as shell) ->
+      if Dict.member key state.resultRefs then
+        MirrorState { state | refresh = Set.insert key state.refresh }
+      else
+        shell
+    ) priorShell keys
+
+
 {-| Accept the current changes. -}
 commit : Mirror doctype -> Mirror doctype
 commit (MirrorState priorState as priorShell) =
@@ -126,11 +142,43 @@ attach mirror group (MirrorState priorState as priorShell) =
     toDoc key dat whc = Resource.therefore (mirror key) (whc dat)
     docPair key dat = toDoc key dat |> \f -> (f fst, f snd)
 
+    currentData key =
+      DB.getGroupSubData key group
+      |> Resource.therefore (mirror key)
+
+    priorRes key =
+      Dict.get key priorState.resultRefs
+      |> Maybe.map Resource.def
+      |> Maybe.withDefault (currentData key)
+
+
+    (MirrorState state as shell, refreshSet) =
+      DB.groupDataResDeltaFoldR
+        (\key dat (currentShell, refreshSet') ->
+          ( docPair key dat
+            |> flip (mirrorDelta__ key) currentShell
+          , Set.remove key refreshSet'
+          )
+        )
+        (priorShell, priorState.refresh)
+        group
+
+
+    -- execute manual refresh on elements whose mirror result will change given the current function
+    (MirrorState state' as shell') =
+      Set.foldl
+        (\key (MirrorState currentState as currentShell) -> currentData key
+        |> Resource.therefore (Resource.def >> (,) (priorRes key))
+        |> Resource.therefore (flip (mirrorDelta__ key) currentShell)
+        |> Resource.otherwise currentShell)
+        shell
+        refreshSet
+
   in
-    DB.groupDataResDeltaFoldR
-      (\key -> docPair key >> mirrorDelta__ key)
-      priorShell
-      group
+    if Set.isEmpty state'.refresh then
+      shell'
+    else
+      MirrorState { state' | refresh = Set.empty }
 
 
 {-| Forward deltas from one mirror to another. -}
