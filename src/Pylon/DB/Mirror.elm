@@ -195,6 +195,96 @@ forward mirror (MirrorState sourceState as sourceShell) (MirrorState priorState 
       sourceState.deltas
 
 
+{-type alias MirrorBinding doctype subfeedback =
+  { source : Mirror doctype
+  , address : Signal.Address (List (GroupFeedback subfeedback))
+  }
+
+
+mirrorGroupDrain__ : Signal.Mailbox (List (GroupFeedback subfeedback))
+mirrorGroupDrain__ = Signal.mailbox []
+
+
+bindingMirrorGroup : Mirror doctype -> MirrorBinding doctype subfeedback
+bindingMirrorGroup source =
+  { source = source
+  , address = mirrorGroupDrain__.address
+  }
+
+sendingMirrorGroupTo : Signal.Address (List (GroupFeedback subfeedback)) -> MirrorBinding doctype subfeedback -> MirrorBinding doctype subfeedback
+sendingMirrorGroupTo address binding =
+  { binding
+  | address = address
+  }
+
+forwardingMirrorGroupTo : (List (GroupFeedback subfeedback) -> List action) -> Signal.Address (List action) -> MirrorBinding doctype subfeedback -> MirrorBinding doctype subfeedback
+forwardingMirrorGroupTo factions address =
+  sendingMirrorGroupTo (Signal.forwardTo address factions)
+
+
+integrateMirrorGroup_
+  :  (subtype -> (subtype, List (DB.DBTask never)))
+  -> (String -> subtype -> (subtype, List (DB.DBTask never)))
+  -> Mirror subtype -> Group subtype -> (Group subtype, List (DB.DBTask never))
+integrateMirrorGroup_ cancelSub subscribeSub source priorGroup =
+  let
+    ((group, cancelResetTasks), needsIntegration) =
+      if priorGroup.currentLocation /= Just newLocation then
+        (cancelAndResetGroup cancelSub priorGroup, False)
+      else
+        ((priorGroup, []), True)
+
+  in
+    if needsIntegration then
+      Dict.foldr
+        (\key delta (group', tasks') ->
+          case delta of
+            (data', GroupRmD) ->
+              cancelSub data'
+              |> \(data_, tasks_) -> (groupRemoveExistingData key group', tasks_ ++ tasks')
+            (data', deltaTag) ->
+              subscribeSub key data'
+              |> \(data_, tasks_) -> (groupAlwaysInsertData key data_ group', tasks_ ++ tasks')
+          )
+        ({ group | dataDelta = Dict.empty }, App.finalizeTasks App.sequence cancelResetTasks)
+        group.dataDelta
+      -- parallelize subscription and cancellation of sub-items
+      |> \(group'', tasks'') -> (group'', App.finalizeTasks App.parallel tasks'')
+    else
+      (group, App.finalizeTasks App.sequence cancelResetTasks)
+
+
+mirrorGroupSubscriber
+  : (subtype -> (subtype, List (DB.DBTask never)))
+  -> (subbinding -> subtype -> (subtype, List (DB.DBTask never)))
+  -> (String -> doctype -> subbinding)
+  -> MirrorBinding doctype subfeedback
+  -> DB.Group subtype
+  -> (DB.Group subtype, List (DB.DBTask never))
+mirrorGroupSubscriber cancelSub subscribeSub bindSub binding group =
+  let
+    (groupAddress, groupSourceMirror) =
+      (binding.address, binding.source)
+
+    (group, integrationTasks) =
+      integrateGroup_ cancelSub (bindSub' binding >> subscribeSub) groupLocation priorGroup
+
+
+    pendingIfUnknown = Resource.deriveIf Resource.isUnknown (always Resource.pending)
+
+  in
+    ( { group
+      | addSubscription = pendingIfUnknown group.addSubscription
+      , removeSubscription = pendingIfUnknown group.removeSubscription
+      , currentLocation = Just groupLocation
+      }
+    , [ App.finalizeTasks App.sequence addSubscriptionTasks
+      , App.finalizeTasks App.sequence removeSubscriptionTasks
+      , App.finalizeTasks App.sequence integrationTasks
+      ] |> List.concat >> App.finalizeTasks App.sequence
+    )-}
+
+
 updateMirrorDeltas__ : String -> (Resource DB.DBError doctype, Resource DB.DBError doctype) -> Mirror doctype -> Mirror doctype
 updateMirrorDeltas__ key deltaPair (MirrorState priorState) =
   MirrorState

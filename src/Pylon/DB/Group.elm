@@ -66,6 +66,7 @@ module Pylon.DB.Group
   , cancelGroup
   , resetGroup
   , cancelAndResetGroup
+  , commitGroup
   , groupSubscriber
 
   , groupDataInputOne
@@ -105,7 +106,7 @@ invoke the operations provided by `Pylon.DB`.
 @docs newGroup, voidGroup
 
 # Raw Group Operations
-@docs groupInputOne, groupInput, cancelGroup, resetGroup, cancelAndResetGroup, groupSubscriber
+@docs groupInputOne, groupInput, cancelGroup, resetGroup, cancelAndResetGroup, commitGroup, groupSubscriber
 
 # DB.Data Group Convenience
 @docs groupDataInputOne, groupDataInput, cancelDataGroup, cancelAndResetDataGroup, groupDataSubscriber, groupRebasedDataSubscriber
@@ -589,11 +590,37 @@ cancelAndResetDataGroup =
   cancelAndResetGroup DB.cancel
 
 
-integrateGroup_
+{-| Commit the currently pending deltas in a group. This exposes the ability to manually manage the
+items in a group, which is preferable in cases where you do not simply want to subscribe to a
+Firebase location. For example, DB.Mirror provides the `group*Mirror` group of functions, which
+allows you to derive bindings from a Mirror instead of a Firebase subscription. This is highly
+useful for denormalization. -}
+commitGroup
+  :  (subtype -> (subtype, List (DB.DBTask never)))
+  -> (String -> subtype -> (subtype, List (DB.DBTask never)))
+  -> Group subtype -> (Group subtype, List (DB.DBTask never))
+commitGroup cancelSub subscribeSub group =
+  Dict.foldr
+    (\key delta (group', tasks') ->
+      case delta of
+        (data', GroupRmD) ->
+          cancelSub data'
+          |> \(data_, tasks_) -> (groupRemoveExistingData key group', tasks_ ++ tasks')
+        (data', deltaTag) ->
+          subscribeSub key data'
+          |> \(data_, tasks_) -> (groupAlwaysInsertData key data_ group', tasks_ ++ tasks')
+      )
+    ({ group | dataDelta = Dict.empty }, [])
+    group.dataDelta
+  -- parallelize subscription and cancellation of sub-items
+  |> \(group'', tasks'') -> (group'', App.finalizeTasks App.parallel tasks'')
+
+
+commitLocatedGroup
   :  (subtype -> (subtype, List (DB.DBTask never)))
   -> (String -> subtype -> (subtype, List (DB.DBTask never)))
   -> ElmFire.Location -> Group subtype -> (Group subtype, List (DB.DBTask never))
-integrateGroup_ cancelSub subscribeSub newLocation priorGroup =
+commitLocatedGroup cancelSub subscribeSub newLocation priorGroup =
   let
     ((group, cancelResetTasks), needsIntegration) =
       if priorGroup.currentLocation /= Just newLocation then
@@ -603,20 +630,10 @@ integrateGroup_ cancelSub subscribeSub newLocation priorGroup =
 
   in
     if needsIntegration then
-      Dict.foldr
-        (\key delta (group', tasks') ->
-          case delta of
-            (data', GroupRmD) ->
-              cancelSub data'
-              |> \(data_, tasks_) -> (groupRemoveExistingData key group', tasks_ ++ tasks')
-            (data', deltaTag) ->
-              subscribeSub key data'
-              |> \(data_, tasks_) -> (groupAlwaysInsertData key data_ group', tasks_ ++ tasks')
-          )
-        ({ group | dataDelta = Dict.empty }, App.finalizeTasks App.sequence cancelResetTasks)
-        group.dataDelta
-      -- parallelize subscription and cancellation of sub-items
-      |> \(group'', tasks'') -> (group'', App.finalizeTasks App.parallel tasks'')
+      App.chain
+        [ App.doEffect (always cancelResetTasks)
+        , commitGroup cancelSub subscribeSub
+        ] group
     else
       (group, App.finalizeTasks App.sequence cancelResetTasks)
 
@@ -691,7 +708,7 @@ groupSubscriber cancelSub subscribeSub bindSub' binding priorGroup =
       (binding.address, binding.location, binding.ordering)
 
     (group, integrationTasks) =
-      integrateGroup_ cancelSub (bindSub' binding >> subscribeSub) groupLocation priorGroup
+      commitLocatedGroup cancelSub (bindSub' binding >> subscribeSub) groupLocation priorGroup
 
     (maybeAddSubscription, maybeRemoveSubscription) =
       (Resource.maybeKnown group.addSubscription, Resource.maybeKnown group.removeSubscription)
