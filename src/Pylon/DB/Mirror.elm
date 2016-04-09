@@ -35,8 +35,12 @@ module Pylon.DB.Mirror
   , deltas
   , commit
   , refresh
+  , inject
   , attach
   , forward
+
+  , mirrorDataGroup
+  , mirrorGroup
   ) where
 
 {-| A binding for ElmTextSearch and Pylon.DB.Group.
@@ -53,9 +57,14 @@ module Pylon.DB.Mirror
 # Group Mirroring
 @docs refresh, attach, forward
 
-# Integration
-@docs commit
+# Control
+@docs inject, commit
+
+# Group Binding
+@docs mirrorGroup, mirrorDataGroup
 -}
+
+import Pylon.App as App
 
 import Pylon.DB as DB
 import Pylon.DB.Group as DB
@@ -135,6 +144,18 @@ commit (MirrorState priorState as priorShell) =
     MirrorState { priorState | deltas = Dict.empty, resultRefs = priorState.resultRefs_ }
 
 
+{-| Inject a change. This can be used to manually control mirror sources in the case that they
+are not derived from some DB.Group. -}
+inject : String -> Resource DB.DBError doctype -> Mirror doctype -> Mirror doctype
+inject key docResource priorShell =
+  mirrorDelta__ key
+    ( Dict.get key (changedRefs priorShell)
+      |> Maybe.map Resource.def
+      |> Maybe.withDefault Resource.void
+    , docResource
+    ) priorShell
+
+
 {-| Mirror a DB group. -}
 attach : (String -> rectype -> doctype) -> DB.Group (DB.Data rectype) -> Mirror doctype -> Mirror doctype
 attach mirror group (MirrorState priorState as priorShell) =
@@ -195,94 +216,90 @@ forward mirror (MirrorState sourceState as sourceShell) (MirrorState priorState 
       sourceState.deltas
 
 
-{-type alias MirrorBinding doctype subfeedback =
-  { source : Mirror doctype
-  , address : Signal.Address (List (GroupFeedback subfeedback))
-  }
+{-| This makes binding a flat group of data much more convenient. -}
+mirrorDataGroup
+  :  (String -> doctype -> DB.Binding v)
+  -> Mirror doctype
+  -> DB.Group (DB.Data v)
+  -> (DB.Group (DB.Data v), List (DB.DBTask never))
+mirrorDataGroup =
+  mirrorGroup DB.newData DB.cancel DB.subscribe
 
 
-mirrorGroupDrain__ : Signal.Mailbox (List (GroupFeedback subfeedback))
-mirrorGroupDrain__ = Signal.mailbox []
-
-
-bindingMirrorGroup : Mirror doctype -> MirrorBinding doctype subfeedback
-bindingMirrorGroup source =
-  { source = source
-  , address = mirrorGroupDrain__.address
-  }
-
-sendingMirrorGroupTo : Signal.Address (List (GroupFeedback subfeedback)) -> MirrorBinding doctype subfeedback -> MirrorBinding doctype subfeedback
-sendingMirrorGroupTo address binding =
-  { binding
-  | address = address
-  }
-
-forwardingMirrorGroupTo : (List (GroupFeedback subfeedback) -> List action) -> Signal.Address (List action) -> MirrorBinding doctype subfeedback -> MirrorBinding doctype subfeedback
-forwardingMirrorGroupTo factions address =
-  sendingMirrorGroupTo (Signal.forwardTo address factions)
-
-
-integrateMirrorGroup_
-  :  (subtype -> (subtype, List (DB.DBTask never)))
-  -> (String -> subtype -> (subtype, List (DB.DBTask never)))
-  -> Mirror subtype -> Group subtype -> (Group subtype, List (DB.DBTask never))
-integrateMirrorGroup_ cancelSub subscribeSub source priorGroup =
-  let
-    ((group, cancelResetTasks), needsIntegration) =
-      if priorGroup.currentLocation /= Just newLocation then
-        (cancelAndResetGroup cancelSub priorGroup, False)
-      else
-        ((priorGroup, []), True)
-
-  in
-    if needsIntegration then
-      Dict.foldr
-        (\key delta (group', tasks') ->
-          case delta of
-            (data', GroupRmD) ->
-              cancelSub data'
-              |> \(data_, tasks_) -> (groupRemoveExistingData key group', tasks_ ++ tasks')
-            (data', deltaTag) ->
-              subscribeSub key data'
-              |> \(data_, tasks_) -> (groupAlwaysInsertData key data_ group', tasks_ ++ tasks')
-          )
-        ({ group | dataDelta = Dict.empty }, App.finalizeTasks App.sequence cancelResetTasks)
-        group.dataDelta
-      -- parallelize subscription and cancellation of sub-items
-      |> \(group'', tasks'') -> (group'', App.finalizeTasks App.parallel tasks'')
-    else
-      (group, App.finalizeTasks App.sequence cancelResetTasks)
-
-
-mirrorGroupSubscriber
-  : (subtype -> (subtype, List (DB.DBTask never)))
+{-| This is a special binding which keeps a group's set of bound data up to date by the contents of
+a mirror. Great for deep indexing and denormalization. -}
+mirrorGroup
+  :  subtype
+  -> (subtype -> (subtype, List (DB.DBTask never)))
   -> (subbinding -> subtype -> (subtype, List (DB.DBTask never)))
   -> (String -> doctype -> subbinding)
-  -> MirrorBinding doctype subfeedback
+  -> Mirror doctype
   -> DB.Group subtype
   -> (DB.Group subtype, List (DB.DBTask never))
-mirrorGroupSubscriber cancelSub subscribeSub bindSub binding group =
+mirrorGroup newSub cancelSub subscribeSub docBinding source priorGroup =
   let
-    (groupAddress, groupSourceMirror) =
-      (binding.address, binding.source)
+    group =
+      Resource.therefore (always priorGroup) priorGroup.data
+      |> Resource.otherwise
+          { priorGroup
+          | data = Resource.def Dict.empty
+          , addSubscription = Resource.void
+          , removeSubscription = Resource.void
+          , currentLocation = Nothing
+          }
 
-    (group, integrationTasks) =
-      integrateGroup_ cancelSub (bindSub' binding >> subscribeSub) groupLocation priorGroup
+    noSubscribe = always (App.asEffector identity)
+    docSubscribe key doc = subscribeSub (docBinding key doc)
+
+    compressDeltaList ls =
+      let
+        latest =
+          List.head ls
+          |> Maybe.map snd
+
+        oldest =
+          List.foldl (\(prior, _) _ -> Just prior) Nothing ls
+
+        compressedList =
+          Maybe.map2 (,) oldest latest
+          |> Maybe.map (flip (::) [])
+          |> Maybe.withDefault []
+      in
+        compressedList
 
 
-    pendingIfUnknown = Resource.deriveIf Resource.isUnknown (always Resource.pending)
+    (group', tasks') =
+      Dict.foldl
+        (\key deltaList -> flip
+          ( List.foldr
+              (\deltaPair (group, tasks) ->
+                case deltaPair of
+                  (_, Resource.Known doc) ->
+                    App.chain
+                      [ DB.groupDoSub cancelSub key
+                      , App.doEffect (always tasks)
+                      , App.asEffector (DB.groupAddSub newSub key)
+                      , App.asEffector (DB.groupUpdateSub (always newSub) key)
+                      , DB.groupDoSub (docSubscribe key doc) key
+                      ] group
 
+                  (Resource.Known doc, _) ->
+                    App.chain
+                      [ App.doEffect (always tasks)
+                      , App.asEffector (DB.groupRemoveSub key)
+                      ] group
+
+                  _ ->
+                    (group, tasks)
+              )
+          ) (compressDeltaList deltaList)
+        ) (group, []) (deltas source)
   in
-    ( { group
-      | addSubscription = pendingIfUnknown group.addSubscription
-      , removeSubscription = pendingIfUnknown group.removeSubscription
-      , currentLocation = Just groupLocation
-      }
-    , [ App.finalizeTasks App.sequence addSubscriptionTasks
-      , App.finalizeTasks App.sequence removeSubscriptionTasks
-      , App.finalizeTasks App.sequence integrationTasks
-      ] |> List.concat >> App.finalizeTasks App.sequence
-    )-}
+    App.chain
+      [ always (App.finalizeTasks App.sequence tasks')
+        |> App.doEffect
+      , DB.commitGroup cancelSub noSubscribe
+      ] group'
 
 
 updateMirrorDeltas__ : String -> (Resource DB.DBError doctype, Resource DB.DBError doctype) -> Mirror doctype -> Mirror doctype
