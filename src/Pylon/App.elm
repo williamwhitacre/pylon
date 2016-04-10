@@ -316,7 +316,7 @@ chainSub fget fupdate functions data =
   |> \(sub', tasks') -> (fupdate sub' data, tasks')
 
 
-{-| Conditionally subchain some effectors. -}
+{-| Conditionally chain some effectors on an inner model. -}
 chainSubIf
   :  (modeltype -> Bool)
   -> (modeltype -> innertype)

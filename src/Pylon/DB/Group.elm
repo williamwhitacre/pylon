@@ -63,6 +63,7 @@ module Pylon.DB.Group
   , cancelAndResetDataGroup
 
   , groupIntegrate
+  , groupDataIntegrate
   , groupSubscription
   ) where
 
@@ -91,7 +92,7 @@ invoke the operations provided by `Pylon.DB`.
 @docs groupInputOne, groupInput, cancelGroup, resetGroup, cancelAndResetGroup, groupIntegrate, groupSubscription
 
 # Data Group Operations
-@docs groupDataInputOne, groupDataInput, cancelDataGroup, cancelAndResetDataGroup
+@docs groupDataInputOne, groupDataInput, cancelDataGroup, cancelAndResetDataGroup, groupDataIntegrate
 
 -}
 
@@ -566,6 +567,20 @@ commitGroup cancelSub subscribeSub group =
     group.dataDelta
   -- parallelize subscription and cancellation of sub-items
   |> \(group'', tasks'') -> (group'', App.finalizeTasks App.parallel tasks'')
+
+
+{-| Convenient short version for groups of just data. This equivalency holds:
+
+    groupDataIntegrate controllers =
+      groupIntegrate controllers DB.cancel DB.subscribe
+
+-}
+groupDataIntegrate
+  :  List (GroupConfig (DB.Feedback v) (DB.Binding v) -> Group (DB.Data v) -> (Group (DB.Data v), List (DB.DBTask never)))
+  -> GroupConfig (DB.Feedback v) (DB.Binding v)
+  -> Group (DB.Data v) -> (Group (DB.Data v), List (DB.DBTask never))
+groupDataIntegrate controllers =
+  groupIntegrate controllers DB.cancel DB.subscribe
 
 
 {-| This is a more configurable version of groupSubscriber. It is now the underlying code for

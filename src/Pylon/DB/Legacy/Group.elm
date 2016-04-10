@@ -9,7 +9,7 @@ module Pylon.DB.Legacy.Group
   , groupSubBinding
   , groupSubscriber
   , orderGroupBy
-  , sendingGroupTo 
+  , sendingGroupTo
   ) where
 
 {-| This is being kept in a seperate legacy module where it will not clutter things. Since a lot
@@ -19,16 +19,10 @@ heavily invested in an existing project that uses these.
 @docs bindingGroupTo, dataRebasedBinding, dataSubBinding, forwardingGroupTo, groupDataSubscriber, groupRebasedBinding, groupRebasedDataSubscriber, groupSubBinding, groupSubscriber, orderGroupBy, sendingGroupTo
 -}
 
-import Pylon.App as App
-import Pylon.Resource as Resource exposing (Resource)
 import Pylon.DB as DB
 import Pylon.DB.Group exposing (..)
 
 import ElmFire
-
-import Task exposing (Task, andThen, onError)
-import Dict exposing (Dict)
-import Set exposing (Set)
 
 
 groupDrain__ : Signal.Mailbox (List (GroupFeedback subfeedback))
