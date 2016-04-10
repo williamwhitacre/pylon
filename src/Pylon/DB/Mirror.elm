@@ -38,9 +38,6 @@ module Pylon.DB.Mirror
   , inject
   , attach
   , forward
-
-  , mirrorDataGroup
-  , mirrorGroup
   ) where
 
 {-| A binding for ElmTextSearch and Pylon.DB.Group.
@@ -60,11 +57,7 @@ module Pylon.DB.Mirror
 # Control
 @docs inject, commit
 
-# Group Binding
-@docs mirrorGroup, mirrorDataGroup
 -}
-
-import Pylon.App as App
 
 import Pylon.DB as DB
 import Pylon.DB.Group as DB
@@ -215,92 +208,30 @@ forward mirror (MirrorState sourceState as sourceShell) (MirrorState priorState 
       priorShell
       sourceState.deltas
 
+{-
 
-{-| This makes binding a flat group of data much more convenient. -}
-mirrorDataGroup
-  :  (String -> doctype -> DB.Binding v)
-  -> Mirror doctype
-  -> DB.Group (DB.Data v)
-  -> (DB.Group (DB.Data v), List (DB.DBTask never))
-mirrorDataGroup =
-  mirrorGroup DB.newData DB.cancel DB.subscribe
-
-
-{-| This is a special binding which keeps a group's set of bound data up to date by the contents of
-a mirror. Great for deep indexing and denormalization. -}
-mirrorGroup
-  :  subtype
-  -> (subtype -> (subtype, List (DB.DBTask never)))
-  -> (subbinding -> subtype -> (subtype, List (DB.DBTask never)))
-  -> (String -> doctype -> subbinding)
-  -> Mirror doctype
-  -> DB.Group subtype
-  -> (DB.Group subtype, List (DB.DBTask never))
-mirrorGroup newSub cancelSub subscribeSub docBinding source priorGroup =
+groupRoute : (String -> doctype -> subbinding) -> Mirror doctype -> GroupConfig subfeedback subbinding -> Group subtype -> (Group subtype, List (DB.DBTask never))
+groupRoute route (MirrorState sourceState as sourceShell) config group =
   let
-    group =
-      Resource.therefore (always priorGroup) priorGroup.data
-      |> Resource.otherwise
-          { priorGroup
-          | data = Resource.def Dict.empty
-          , addSubscription = Resource.void
-          , removeSubscription = Resource.void
-          , currentLocation = Nothing
-          }
+    sourceDoc key =
+      Dict.get key sourceState.resultRefs_
 
-    noSubscribe = always (App.asEffector identity)
-    docSubscribe key doc = subscribeSub (docBinding key doc)
+    bindingLocation key = Resource.therefore (route key <| sourceDoc key)
 
-    compressDeltaList ls =
-      let
-        latest =
-          List.head ls
-          |> Maybe.map snd
-
-        oldest =
-          List.foldl (\(prior, _) _ -> Just prior) Nothing ls
-
-        compressedList =
-          Maybe.map2 (,) oldest latest
-          |> Maybe.map (flip (::) [])
-          |> Maybe.withDefault []
-      in
-        compressedList
-
-
-    (group', tasks') =
-      Dict.foldl
-        (\key deltaList -> flip
-          ( List.foldr
-              (\deltaPair (group, tasks) ->
-                case deltaPair of
-                  (_, Resource.Known doc) ->
-                    App.chain
-                      [ DB.groupDoSub cancelSub key
-                      , App.doEffect (always tasks)
-                      , App.asEffector (DB.groupAddSub newSub key)
-                      , App.asEffector (DB.groupUpdateSub (always newSub) key)
-                      , DB.groupDoSub (docSubscribe key doc) key
-                      ] group
-
-                  (Resource.Known doc, _) ->
-                    App.chain
-                      [ App.doEffect (always tasks)
-                      , App.asEffector (DB.groupRemoveSub key)
-                      ] group
-
-                  _ ->
-                    (group, tasks)
-              )
-          ) (compressDeltaList deltaList)
-        ) (group, []) (deltas source)
   in
-    App.chain
-      [ always (App.finalizeTasks App.sequence tasks')
-        |> App.doEffect
-      , DB.commitGroup cancelSub noSubscribe
-      ] group'
-
+    Dict.foldr
+      (\key -> flip
+        (List.foldr
+          (\(prior, curr) group' ->
+            case (sourceDoc key, prior, curr) of
+              (_, Resource.Known _, _) -> DB.groupRemoveSub key group'
+              (Just doc, _, Resource.Known data) ->
+          )
+        )
+      )
+      group
+      sourceState.deltas
+-}
 
 updateMirrorDeltas__ : String -> (Resource DB.DBError doctype, Resource DB.DBError doctype) -> Mirror doctype -> Mirror doctype
 updateMirrorDeltas__ key deltaPair (MirrorState priorState) =

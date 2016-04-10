@@ -30,6 +30,7 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 module Pylon.DB.Group
   ( GroupFeedback(..)
+  , GroupConfig
   , GroupBinding
   , Group
 
@@ -66,7 +67,8 @@ module Pylon.DB.Group
   , cancelGroup
   , resetGroup
   , cancelAndResetGroup
-  , commitGroup
+  , groupIntegrate
+  , groupSubscription
   , groupSubscriber
 
   , groupDataInputOne
@@ -81,10 +83,12 @@ module Pylon.DB.Group
 or even a compatible API fitting the same pattern such that this system is easily extensible.
 
 # Types
-@docs GroupFeedback, GroupBinding, Group
+@docs GroupFeedback, GroupConfig, Group
+
+# Types (DEPRECIATED, removed in 6.0.0)
+@docs GroupBinding
 
 # Direct Group Inquiry
-
 @docs getGroupCurrentData, getGroupDeltaData, getGroupDataResDeltas, getGroupDataResDeltaList, groupDataResDeltaFoldL, groupDataResDeltaFoldR, groupDeriveSub, getGroupSubData
 
 # Direct Group Manipulation
@@ -96,19 +100,22 @@ invoke the operations provided by `Pylon.DB`.
 
 @docs groupUpdateSub, groupDoSub, groupDoEachSub, groupAddSub, groupRemoveSub
 
-# Convenience Sub-Binding Shortcuts
+# Convenience Sub-Binding Shortcuts (DEPRECIATED, removed in 6.0.0)
 @docs dataSubBinding, groupSubBinding, dataRebasedBinding, groupRebasedBinding
 
-# DB.Binding Construction
+# DB.Binding Construction (DEPRECIATED, removed in 6.0.0)
 @docs bindingGroupTo, orderGroupBy, sendingGroupTo, forwardingGroupTo
 
 # Group Constructors
 @docs newGroup, voidGroup
 
 # Raw Group Operations
-@docs groupInputOne, groupInput, cancelGroup, resetGroup, cancelAndResetGroup, commitGroup, groupSubscriber
+@docs groupInputOne, groupInput, cancelGroup, resetGroup, cancelAndResetGroup, groupIntegrate, groupSubscription
 
-# DB.Data Group Convenience
+# Raw Group Operations (DEPRECIATED, removed in 6.0.0)
+@docs groupSubscriber
+
+# DB.Data Group Convenience (DEPRECIATED, removed in 6.0.0)
 @docs groupDataInputOne, groupDataInput, cancelDataGroup, cancelAndResetDataGroup, groupDataSubscriber, groupRebasedDataSubscriber
 
 -}
@@ -146,7 +153,9 @@ type GroupFeedback subfeedback =
   | GroupRemoveSubscriptionError ElmFire.Error
 
 
-{-| Nested group subscription binding. -}
+{-| DEPRECIATED, removed in 6.0.0
+
+Nested group subscription binding. -}
 type alias GroupBinding subfeedback =
   { location : ElmFire.Location
   , address : Signal.Address (List (GroupFeedback subfeedback))
@@ -360,7 +369,9 @@ groupDrain__ : Signal.Mailbox (List (GroupFeedback subfeedback))
 groupDrain__ = Signal.mailbox []
 
 
-{-| Construct a new incomplete group binding from a ElmFire Firebase location. -}
+{-| DEPRECIATED, removed in 6.0.0
+
+Construct a new incomplete group binding from a ElmFire Firebase location. -}
 bindingGroupTo : ElmFire.Location -> GroupBinding subfeedback
 bindingGroupTo location =
   { location = location
@@ -369,7 +380,9 @@ bindingGroupTo location =
   }
 
 
-{-| Give an ordering for the group subscription's internal query. Note that this _will not order the
+{-| DEPRECIATED, removed in 6.0.0
+
+Give an ordering for the group subscription's internal query. Note that this _will not order the
 resulting key-value dictionary_, but it is still useful because it will have an effect on which
 results are produced by the Firebase API in the event that limiting is used, which is the case for
 most practical applications. -}
@@ -379,7 +392,9 @@ orderGroupBy ordering groupBinding =
   | ordering = ordering
   }
 
-{-| Provide an address for group feedback actions. If this is not applied to the binding, no feedback
+{-| DEPRECIATED, removed in 6.0.0
+
+Provide an address for group feedback actions. If this is not applied to the binding, no feedback
 will be recieved. -}
 sendingGroupTo : Signal.Address (List (GroupFeedback subfeedback)) -> GroupBinding subfeedback -> GroupBinding subfeedback
 sendingGroupTo address groupBinding =
@@ -387,7 +402,9 @@ sendingGroupTo address groupBinding =
   | address = address
   }
 
-{-| Provide an address for group feedback actions with a transformation function for forwarding. If
+{-| DEPRECIATED, removed in 6.0.0
+
+Provide an address for group feedback actions with a transformation function for forwarding. If
 this is not applied to the binding, no feedback will be recieved. -}
 forwardingGroupTo : (List (GroupFeedback subfeedback) -> List action) -> Signal.Address (List action) -> GroupBinding subfeedback -> GroupBinding subfeedback
 forwardingGroupTo factions address =
@@ -590,11 +607,7 @@ cancelAndResetDataGroup =
   cancelAndResetGroup DB.cancel
 
 
-{-| Commit the currently pending deltas in a group. This exposes the ability to manually manage the
-items in a group, which is preferable in cases where you do not simply want to subscribe to a
-Firebase location. For example, DB.Mirror provides the `group*Mirror` group of functions, which
-allows you to derive bindings from a Mirror instead of a Firebase subscription. This is highly
-useful for denormalization. -}
+-- REMOVED IN 5.0.0
 commitGroup
   :  (subtype -> (subtype, List (DB.DBTask never)))
   -> (String -> subtype -> (subtype, List (DB.DBTask never)))
@@ -616,6 +629,7 @@ commitGroup cancelSub subscribeSub group =
   |> \(group'', tasks'') -> (group'', App.finalizeTasks App.parallel tasks'')
 
 
+{-
 commitLocatedGroup
   :  (subtype -> (subtype, List (DB.DBTask never)))
   -> (String -> subtype -> (subtype, List (DB.DBTask never)))
@@ -636,9 +650,12 @@ commitLocatedGroup cancelSub subscribeSub newLocation priorGroup =
         ] group
     else
       (group, App.finalizeTasks App.sequence cancelResetTasks)
+-}
 
 
-{-| A convenience function which makes it a little bit easier to declare a sub-binding function for
+{-| DEPRECIATED, removed in 6.0.0
+
+A convenience function which makes it a little bit easier to declare a sub-binding function for
 concrete data. Note that if you are using the `groupDataSubscriber` convenience function, then this
 is already invoked internally, making the task of bindin a group of concrete records even easier. -}
 dataSubBinding : DB.Config v -> GroupBinding (DB.Feedback v) -> String -> DB.Binding v
@@ -648,7 +665,9 @@ dataSubBinding config groupBinding key =
   |> DB.forwardingTo (List.map <| GroupSub key) groupBinding.address
 
 
-{-| A convenience function which makes it a little bit easier to declare a sub-binding function for
+{-| DEPRECIATED, removed in 6.0.0
+
+A convenience function which makes it a little bit easier to declare a sub-binding function for
 nested groups. -}
 groupSubBinding : ElmFire.OrderOptions -> GroupBinding (GroupFeedback subfeedback') -> String -> GroupBinding subfeedback'
 groupSubBinding ordering groupBinding key =
@@ -658,14 +677,18 @@ groupSubBinding ordering groupBinding key =
   |> forwardingGroupTo (List.map <| GroupSub key) groupBinding.address
 
 
-{-| Convenience function that makes it easier to bind a `Group (DB.Data v)`. -}
+{-| DEPRECIATED, removed in 6.0.0
+
+Convenience function that makes it easier to bind a `Group (DB.Data v)`. -}
 groupDataSubscriber : DB.Config v -> GroupBinding (DB.Feedback v) -> Group (DB.Data v) -> (Group (DB.Data v), List (DB.DBTask never))
 groupDataSubscriber config =
   groupSubscriber DB.cancel DB.subscribe (dataSubBinding config)
 
 
 
-{-| Rebased binding uses the key of the discovered item to get a child at a diffeent location than
+{-| DEPRECIATED, removed in 6.0.0
+
+Rebased binding uses the key of the discovered item to get a child at a diffeent location than
 that of the group binding. A good example would be a subscription that tracks a group of users,
 but actually pulls data from a global profiles list. -}
 dataRebasedBinding : ElmFire.Location -> DB.Config v -> GroupBinding (DB.Feedback v) -> String -> DB.Binding v
@@ -675,7 +698,9 @@ dataRebasedBinding base config groupBinding key =
   |> DB.forwardingTo (List.map <| GroupSub key) groupBinding.address
 
 
-{-| Rebased binding for nested groups. -}
+{-| DEPRECIATED, removed in 6.0.0
+
+Rebased binding for nested groups. -}
 groupRebasedBinding : ElmFire.Location -> ElmFire.OrderOptions -> GroupBinding (GroupFeedback subfeedback') -> String -> GroupBinding subfeedback'
 groupRebasedBinding base ordering groupBinding key =
   ElmFire.sub key base
@@ -684,26 +709,111 @@ groupRebasedBinding base ordering groupBinding key =
   |> forwardingGroupTo (List.map <| GroupSub key) groupBinding.address
 
 
-{-| Convenience function that makes it easier to bind a `Group (DB.Data v)`. -}
+{-| DEPRECIATED, removed in 6.0.0
+
+Convenience function that makes it easier to bind a `Group (DB.Data v)`. -}
 groupRebasedDataSubscriber : ElmFire.Location -> DB.Config v -> GroupBinding (DB.Feedback v) -> Group (DB.Data v) -> (Group (DB.Data v), List (DB.DBTask never))
 groupRebasedDataSubscriber base config =
   groupSubscriber DB.cancel DB.subscribe (dataRebasedBinding base config)
 
 
-{-| Subscribe to a group, such that members will be automatically added and removed on synchronization
-with the remote database. This is designed to work recursively, such that nested groups and concrete
-data record groups alike will be subscribed and cancelled appropriately as they are added and removed
-transparently. Since using this function directly requires you to define the cancellation, subscription,
-and binding functions for the subtype, a convenience function is provided for binding groups of
-concrete data records called `groupDataSubscriber` which makes subscribing to flat groups of data
-substantially easier. -}
+{-| Specifies the binding behavior and mailbox address for a groupIntegrate -}
+type alias GroupConfig subfeedback subbinding =
+  { binding : Signal.Address (List (GroupFeedback subfeedback)) -> String -> subbinding
+  , address : Signal.Address (List (GroupFeedback subfeedback))
+  }
+
+
+{-| This is a more configurable version of groupSubscriber. It is now the underlying code for
+groupSubscriber. `groupSubscriber` is depreciated in favor of this. The rationale
+for this piece is to allow total abstraction of the group source. I ran in to difficulties in
+reusing group to mirror changes in local information, such as Mirrors (see DB.Mirror). -}
+groupIntegrate
+  :  List (GroupConfig subfeedback subbinding -> Group subtype -> (Group subtype, List (DB.DBTask never)))
+  -> (subtype -> (subtype, List (DB.DBTask never)))
+  -> (subbinding -> subtype -> (subtype, List (DB.DBTask never)))
+  -> GroupConfig subfeedback subbinding
+  -> Group subtype -> (Group subtype, List (DB.DBTask never))
+groupIntegrate controllers cancelSub integrateSub config priorGroup =
+  App.chain
+    (commitGroup cancelSub (config.binding config.address >> integrateSub)
+    :: List.map ((|>) config) controllers)
+    priorGroup
+
+
+{-| Controller for groupIntegrate that carries out the behavior groupSubscriber, which is the most
+convenient option for mirroring data from Firebase directly. Since the previous definition was
+frustratingly limited to this, I was not able to configure the group to mirror a different source,
+such as bindings derived from the data in a mirror. -}
+groupSubscription : ElmFire.Location -> ElmFire.OrderOptions -> GroupConfig subfeedback subbinding -> Group subtype -> (Group subtype, List (DB.DBTask never))
+groupSubscription location orderOptions config priorGroup =
+  let
+    fromSnapshot tag snapshot =
+      Signal.send config.address [tag snapshot.key]
+
+    fromCancellation cancelTag subscriptionTag cancellation =
+      case cancellation of
+        ElmFire.Unsubscribed _ -> Signal.send config.address [cancelTag]
+        ElmFire.QueryError _ error -> Signal.send config.address [subscriptionTag error]
+
+    subscriptionTask (onSubs, onErr, onSnapshot, onCancellation) query' =
+      (ElmFire.subscribe onSnapshot onCancellation query' location
+        `andThen` (\subscription -> Signal.send config.address [onSubs subscription])
+        `onError` (\error -> Signal.send config.address [onErr error]))
+
+    (addSubscriptionTask, removeSubscriptionTask) =
+      ( subscriptionTask
+          ( GroupSubscribedAdd, GroupAddSubscriptionError, fromSnapshot GroupAdd
+          , fromCancellation GroupCancelledAdd GroupAddSubscriptionError
+          )
+      , subscriptionTask
+          ( GroupSubscribedRemove, GroupRemoveSubscriptionError, fromSnapshot GroupRemove
+          , fromCancellation GroupCancelledRemove GroupRemoveSubscriptionError
+          )
+      )
+
+  in
+    App.chain
+      [ App.chain
+          [ App.chainIf (.removeSubscription >> Resource.isUnknown)
+              [ App.doEffect (always [ removeSubscriptionTask (ElmFire.childRemoved orderOptions) ])
+              , App.asEffector (\m -> { m | removeSubscription = Resource.pending })
+              ]
+          , App.chainIf (.addSubscription >> Resource.isUnknown)
+              [ App.doEffect (always [ addSubscriptionTask (ElmFire.childAdded orderOptions) ])
+              , App.asEffector (\m -> { m | addSubscription = Resource.pending })
+              ]
+          ]
+          |> App.finalizedEffector App.sequence
+      ] priorGroup
+
+
+
+{-| DEPRECIATED, removed in 6.0.0
+
+This is the old subscription primitive, and is quite a bit more limited. For testing purposes,
+it has been implemented in terms of `groupIntegrate` and `groupSubscription`. `groupIntegrate` is
+much more powerful, and takes a list of "sourcing" functions like `groupSubscription`. -}
 groupSubscriber
   :  (subtype -> (subtype, List (DB.DBTask never)))
   -> (subbinding -> subtype -> (subtype, List (DB.DBTask never)))
   -> (GroupBinding subfeedback -> String -> subbinding)
   -> GroupBinding subfeedback -> Group subtype -> (Group subtype, List (DB.DBTask never))
-groupSubscriber cancelSub subscribeSub bindSub' binding priorGroup =
+groupSubscriber cancelSub integrateSub bindSub' binding priorGroup =
   let
+    groupConfig =
+      { binding = (\_ -> bindSub' binding)
+      , address = binding.address
+      }
+
+  in
+    groupIntegrate
+      [ groupSubscription binding.location binding.ordering
+      ] cancelSub integrateSub groupConfig priorGroup
+
+
+
+{-  let
     (groupAddress, groupLocation, groupOrdering) =
       (binding.address, binding.location, binding.ordering)
 
@@ -767,3 +877,4 @@ groupSubscriber cancelSub subscribeSub bindSub' binding priorGroup =
       , App.finalizeTasks App.sequence integrationTasks
       ] |> List.concat >> App.finalizeTasks App.sequence
     )
+-}

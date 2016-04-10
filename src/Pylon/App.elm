@@ -49,6 +49,7 @@ module Pylon.App
 
   , chain
   , chainIf
+  , chainWhile
   , chainSub
   , chainSubIf
   , chainFinalizingEach
@@ -130,7 +131,7 @@ possibly producing a number of tasks to execute. Such task lists can be either e
 by the user using `finalizeTasks`, or they can be converted to `ActionTask`s and returned to the
 top level, where the configured `Dispatch` method is used to run the tasks.
 
-@docs chain, chainIf, chainSub, chainSubIf, chainFinalizingEach, asEffector, mappedEffector, noEffect, doEffect, finalizedEffector
+@docs chain, chainIf, chainWhile, chainSub, chainSubIf, chainFinalizingEach, asEffector, mappedEffector, noEffect, doEffect, finalizedEffector
 
 
 # Task Manipulation
@@ -163,6 +164,8 @@ import Task exposing (Task, andThen, onError)
 import Task.Extra as TaskEx
 
 import Time exposing (Time)
+
+import Trampoline exposing (..)
 
 
 {-| Task dispatch mode. -}
@@ -279,6 +282,24 @@ chainIf predicate functions data =
     chain functions data
   else
     (data, [])
+
+
+{-| Loop a list of effectors until the predicate is no longer satisfied. -}
+chainWhile : (modeltype -> Bool) -> List (modeltype -> (modeltype, List (Task z r))) -> modeltype -> (modeltype, List (Task z r))
+chainWhile predicate functions data =
+  trampoline (chainWhile' (data, []) predicate functions)
+  |> \(data', taskLists) -> (data', List.foldr (++) [] taskLists)
+
+
+chainWhile' : (modeltype, List (List (Task z r))) -> (modeltype -> Bool) -> List (modeltype -> (modeltype, List (Task z r))) -> Trampoline (modeltype, List (List (Task z r)))
+chainWhile' (data, taskLists) predicate functions =
+  if predicate data then
+    chain functions data
+    |> \(data', tasks) ->
+        Continue
+          (\() -> chainWhile' (data', tasks :: taskLists) predicate functions)
+  else
+    Done (data, taskLists)
 
 
 {-| Chain a list of effectors on a sub model. Provide a fetch and an update function to extract

@@ -1,5 +1,5 @@
 {
-    "version": "4.18.0",
+    "version": "5.0.0",
     "summary": "Pylon is a support library for Firebase applications using ElmFire.",
     "repository": "https://github.com/williamwhitacre/pylon.git",
     "license": "BSD3",
