@@ -30,14 +30,20 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 module Pylon.DB.Mirror
   ( Mirror
   , mirror
+
   , refs
   , changedRefs
   , deltas
-  , commit
+
   , refresh
-  , inject
   , attach
   , forward
+
+  , inject
+  , commit
+
+  , bindMirror
+  , groupMirror
   ) where
 
 {-| A binding for ElmTextSearch and Pylon.DB.Group.
@@ -51,11 +57,14 @@ module Pylon.DB.Mirror
 # Getters
 @docs refs, changedRefs, deltas
 
-# Group Mirroring
+# Mirroring
 @docs refresh, attach, forward
 
 # Control
 @docs inject, commit
+
+# Group Binding
+@docs bindMirror, groupMirror
 
 -}
 
@@ -66,6 +75,8 @@ import Pylon.Resource as Resource exposing (Resource)
 
 import Dict exposing (Dict)
 import Set exposing (Set)
+
+import Task exposing (andThen)
 
 
 type alias MirrorState_ doctype =
@@ -208,30 +219,40 @@ forward mirror (MirrorState sourceState as sourceShell) (MirrorState priorState 
       priorShell
       sourceState.deltas
 
-{-
 
-groupRoute : (String -> doctype -> subbinding) -> Mirror doctype -> GroupConfig subfeedback subbinding -> Group subtype -> (Group subtype, List (DB.DBTask never))
-groupRoute route (MirrorState sourceState as sourceShell) config group =
-  let
-    sourceDoc key =
-      Dict.get key sourceState.resultRefs_
+{-| Mirror output binding function for use with GroupConfig
 
-    bindingLocation key = Resource.therefore (route key <| sourceDoc key)
+    config =
+      { address = myAddress
+      , binding = bindMirror routeByDoc myMirror
+      }
 
-  in
-    Dict.foldr
-      (\key -> flip
-        (List.foldr
-          (\(prior, curr) group' ->
-            case (sourceDoc key, prior, curr) of
-              (_, Resource.Known _, _) -> DB.groupRemoveSub key group'
-              (Just doc, _, Resource.Known data) ->
-          )
+-}
+bindMirror : (String -> doctype -> subbinding) -> Mirror doctype -> Signal.Address (List (DB.GroupFeedback subfeedback)) -> String -> subbinding
+bindMirror route (MirrorState sourceState as sourceShell) address key =
+  case Dict.get key sourceState.resultRefs_ of
+    Just ref -> route key ref
+    Nothing -> Debug.crash ("Since the source document at " ++ key ++ " does not exist, bindMirror should never have been reached with this key.")
+
+
+{-| Use this in place of groupSubscription to synchronize the group's keys to a mirror. -}
+groupMirror : subtype -> (subtype -> (subtype, List (DB.DBTask never))) -> Mirror doctype -> DB.GroupConfig subfeedback subbinding -> DB.Group subtype -> (DB.Group subtype, List (DB.DBTask never))
+groupMirror newSub cancelAndResetSub (MirrorState sourceState as sourceShell) config group =
+  Dict.foldr
+    (\key -> flip
+      (List.foldr
+        (\(prior, curr) tasks ->
+          case (prior, curr) of
+            (_, Resource.Known _) -> Signal.send config.address [DB.GroupAdd key] :: tasks
+            (Resource.Known _, _) -> Signal.send config.address [DB.GroupRemove key] :: tasks
+            (_, _) -> tasks
         )
       )
-      group
-      sourceState.deltas
--}
+    )
+    []
+    sourceState.deltas
+  |> (,) group
+
 
 updateMirrorDeltas__ : String -> (Resource DB.DBError doctype, Resource DB.DBError doctype) -> Mirror doctype -> Mirror doctype
 updateMirrorDeltas__ key deltaPair (MirrorState priorState) =
