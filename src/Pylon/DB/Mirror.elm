@@ -76,8 +76,6 @@ import Pylon.Resource as Resource exposing (Resource)
 import Dict exposing (Dict)
 import Set exposing (Set)
 
-import Task exposing (andThen)
-
 
 type alias MirrorState_ doctype =
   { resultRefs  : Dict String doctype
@@ -236,8 +234,8 @@ bindMirror route (MirrorState sourceState as sourceShell) address key =
 
 
 {-| Use this in place of groupSubscription to synchronize the group's keys to a mirror. -}
-groupMirror : subtype -> (subtype -> (subtype, List (DB.DBTask never))) -> Mirror doctype -> DB.GroupConfig subfeedback subbinding -> DB.Group subtype -> (DB.Group subtype, List (DB.DBTask never))
-groupMirror newSub cancelAndResetSub (MirrorState sourceState as sourceShell) config group =
+groupMirror : subtype -> Mirror doctype -> DB.GroupConfig subfeedback subbinding -> DB.Group subtype -> (DB.Group subtype, List (DB.DBTask never))
+groupMirror newSub (MirrorState sourceState as sourceShell) config group =
   Dict.foldr
     (\key -> flip
       (List.foldr
