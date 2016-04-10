@@ -628,5 +628,5 @@ groupSubscription location orderOptions config priorGroup =
               , App.asEffector (\m -> { m | addSubscription = Resource.pending })
               ]
           ]
-          |> App.finalizedEffector App.sequence
+          |> App.finalizedEffector App.parallel
       ] priorGroup
