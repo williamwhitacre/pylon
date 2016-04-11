@@ -37,6 +37,8 @@ module Pylon.DB.Mirror
 
   , refresh
   , attach
+  , attachSynch
+  , attachDelta
   , forward
 
   , inject
@@ -58,7 +60,7 @@ module Pylon.DB.Mirror
 @docs refs, changedRefs, deltas
 
 # Mirroring
-@docs refresh, attach, forward
+@docs refresh, attach, attachSynch, attachDelta, forward
 
 # Control
 @docs inject, commit
@@ -158,9 +160,50 @@ inject key docResource priorShell =
     ) priorShell
 
 
-{-| Mirror a DB group. -}
+{-| Mirror a DB group. Depreciated alias for attachDelta. -}
 attach : (String -> rectype -> doctype) -> DB.Group (DB.Data rectype) -> Mirror doctype -> Mirror doctype
-attach mirror group (MirrorState priorState as priorShell) =
+attach =
+  attachDelta
+
+
+{-| Do a full synchronization on the mirror and the group. -}
+attachSynch : (String -> rectype -> doctype) -> DB.Group (DB.Data rectype) -> Mirror doctype -> Mirror doctype
+attachSynch fmirror group (MirrorState priorState as priorShell) =
+  let
+    toDoc key dat whc = Resource.therefore (fmirror key) (whc dat)
+    docPair key dat = toDoc key dat |> \f -> (f fst, f snd)
+
+    getRes (MirrorState q) key =
+      Dict.get key q.resultRefs_
+      |> Maybe.map Resource.def
+      |> Maybe.withDefault Resource.void
+
+
+    rewriteDeltaPriors =
+      priorState.resultRefs
+      |> Dict.map (\_ _ -> Resource.void)
+      |> Dict.union (Dict.map (always Resource.def) priorState.resultRefs_)
+
+
+    (MirrorState state as shell) =
+      Dict.foldl
+        (\key resource -> mirrorDelta__ key (resource, Resource.void))
+        priorShell
+        rewriteDeltaPriors
+
+  in
+    Dict.foldl
+      (\key {value} shell' ->
+        mirrorDelta__ key
+          ( getRes shell' key
+          , Resource.therefore (fmirror key) value
+          ) shell'
+      ) shell (DB.getGroupCurrentData group)
+
+
+{-| Apply the currently pending set of group deltas to a mirror. -}
+attachDelta : (String -> rectype -> doctype) -> DB.Group (DB.Data rectype) -> Mirror doctype -> Mirror doctype
+attachDelta mirror group (MirrorState priorState as priorShell) =
   let
     toDoc key dat whc = Resource.therefore (mirror key) (whc dat)
     docPair key dat = toDoc key dat |> \f -> (f fst, f snd)
