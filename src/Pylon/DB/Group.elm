@@ -45,7 +45,9 @@ module Pylon.DB.Group
   , groupDoEachSub
   , groupAddSub
   , groupRemoveSub
+
   , groupDeriveSub
+  , getGroupSub
   , getGroupSubData
 
   , newGroup
@@ -74,7 +76,7 @@ or even a compatible API fitting the same pattern such that this system is easil
 @docs GroupFeedback, GroupConfig, Group
 
 # Direct Group Inquiry
-@docs getGroupCurrentData, getGroupDeltaData, getGroupDataResDeltas, getGroupDataResDeltaList, groupDataResDeltaFoldL, groupDataResDeltaFoldR, groupDeriveSub, getGroupSubData
+@docs getGroupCurrentData, getGroupDeltaData, getGroupDataResDeltas, getGroupDataResDeltaList, groupDataResDeltaFoldL, groupDataResDeltaFoldR, groupDeriveSub, getGroupSub, getGroupSubData
 
 # Direct Group Manipulation
 
@@ -246,6 +248,11 @@ groupDeriveSub derived key group =
       Dict.get key (getGroupCurrentData group)
       |> Maybe.map (\data -> derived data |> Just)
       |> Maybe.withDefault Nothing
+
+
+{-| -}
+getGroupSub : String -> Group subtype -> Maybe subtype
+getGroupSub = groupDeriveSub identity
 
 
 {-| -}
