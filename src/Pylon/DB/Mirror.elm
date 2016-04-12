@@ -313,18 +313,18 @@ groupMirror newSub (MirrorState sourceState as sourceShell) config group =
   Dict.foldr
     (\key -> flip
       (List.foldr
-        (\(prior, curr) tasks ->
+        (\(prior, curr) group' ->
           case (prior, curr) of
-            (Resource.Known _, Resource.Known _) -> Signal.send config.address [DB.GroupAdd key |> Debug.log "GROUP MIRROR IS SENDING"] :: tasks
-            (_, Resource.Known _) -> Signal.send config.address [DB.GroupAdd key |> Debug.log "GROUP MIRROR IS SENDING"] :: tasks
-            (Resource.Known _, _) -> Signal.send config.address [DB.GroupRemove key |> Debug.log "GROUP MIRROR IS SENDING"] :: tasks
-            (_, _) -> tasks
+            (Resource.Known _, Resource.Known _) -> DB.groupAddSub newSub key group' --Signal.send config.address [DB.GroupAdd key |> Debug.log "GROUP MIRROR IS SENDING"] :: tasks
+            (_, Resource.Known _) -> DB.groupAddSub newSub key group'  --Signal.send config.address [DB.GroupAdd key |> Debug.log "GROUP MIRROR IS SENDING"] :: tasks
+            (Resource.Known _, _) -> DB.groupRemoveSub key group' --Signal.send config.address [DB.GroupRemove key |> Debug.log "GROUP MIRROR IS SENDING"] :: tasks
+            (_, _) -> group'
         )
       )
     )
-    []
+    group
     sourceState.deltas
-  |> (,) group
+  |> flip (,) []
 
 
 updateMirrorDeltas__ : String -> (Resource DB.DBError doctype, Resource DB.DBError doctype) -> Mirror doctype -> Mirror doctype
