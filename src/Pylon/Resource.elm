@@ -37,7 +37,7 @@ module Pylon.Resource
 
   , maybeKnown
 
-  , assumeIf, assumeIfNot, assumeInCase, deriveIf
+  , assumeIf, assumeIfNot, assumeInCase, deriveIf, deriveKnown
 
   , otherwise
   , therefore
@@ -77,7 +77,7 @@ We export the tags as well so as to allow the user easy case destructuring.
 
 
 # Reduction
-@docs therefore, otherwise, decideBy, assumeIf, assumeIfNot, assumeInCase, deriveIf
+@docs therefore, otherwise, decideBy, assumeIf, assumeIfNot, assumeInCase, deriveIf, deriveKnown
 
 
 # Interop with Result and Maybe
@@ -186,13 +186,8 @@ resouce structure, and thus any pending changes will be integrated immediately. 
 preserve deltas for the purpose of mirroring and efficient data flow, then one should be using
 deltaTo in order to transform just the changes. -}
 therefore : (v -> v') -> Resource errortype v -> Resource errortype v'
-therefore xdcr res =
-  case res of
-    Unknown -> Unknown
-    Pending -> Pending
-    Void -> Void
-    Undecided err' -> Undecided err'
-    Known x' -> Known (xdcr x')
+therefore xdcr =
+  deriveKnown (xdcr >> Known)
 
 
 {-| If the resource is an undecided resource, then the given  -}
@@ -228,6 +223,19 @@ assumeInCase possibleAssumption res =
 deriveIf : (Resource errortype v' -> Bool) -> (Resource errortype v' -> Resource errortype v') -> Resource errortype v' -> Resource errortype v'
 deriveIf satisfies f res =
   if satisfies res then f res else res
+
+
+{-| If the resource is known, then use the given function to create an entirely new replacement resource,
+otherwise carry the state to the new resource. This always transforms the type because no other states
+carry the value type. -}
+deriveKnown : (v -> Resource errortype v') -> Resource errortype v -> Resource errortype v'
+deriveKnown xdcr res =
+  case res of
+    Unknown -> Unknown
+    Pending -> Pending
+    Void -> Void
+    Undecided err' -> Undecided err'
+    Known x' -> xdcr x'
 
 
 {-| If a resource is known, then give Just it's value, otherwise Nothing. -}

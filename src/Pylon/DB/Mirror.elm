@@ -37,8 +37,8 @@ module Pylon.DB.Mirror
 
   , refresh
   , attach
-  , attachSynch
-  , attachDelta
+  , attachSynch, attachFilterSynch
+  , attachDelta, attachFilterDelta
   , forward
 
   , inject
@@ -60,7 +60,7 @@ module Pylon.DB.Mirror
 @docs refs, changedRefs, deltas
 
 # Mirroring
-@docs refresh, attach, attachSynch, attachDelta, forward
+@docs refresh, attach, attachSynch, attachDelta, attachFilterSynch, attachFilterDelta, forward
 
 # Control
 @docs inject, commit
@@ -165,12 +165,39 @@ attach : (String -> rectype -> doctype) -> DB.Group (DB.Data rectype) -> Mirror 
 attach =
   attachDelta
 
-
-{-| Do a full synchronization on the mirror and the group. -}
+{-| Reflect the entire group working set in a mirror. -}
 attachSynch : (String -> rectype -> doctype) -> DB.Group (DB.Data rectype) -> Mirror doctype -> Mirror doctype
-attachSynch fmirror group (MirrorState priorState as priorShell) =
+attachSynch fmirror =
+  attachSynch__ (\key -> fmirror key >> Just)
+
+
+{-| Apply the currently pending set of group deltas to a mirror. -}
+attachDelta : (String -> rectype -> doctype) -> DB.Group (DB.Data rectype) -> Mirror doctype -> Mirror doctype
+attachDelta fmirror =
+  attachDelta__ (\key -> fmirror key >> Just)
+
+
+{-| Reflect the entire group working set in a mirror, excluding any key-record pairs that produce Nothing instead of Just a document. -}
+attachFilterSynch : (String -> rectype -> Maybe doctype) -> DB.Group (DB.Data rectype) -> Mirror doctype -> Mirror doctype
+attachFilterSynch =
+  attachSynch__
+
+
+{-| Apply the currently pending set of group deltas to a mirror, excluding any key-record pairs that produce Nothing instead of Just a document. -}
+attachFilterDelta : (String -> rectype -> Maybe doctype) -> DB.Group (DB.Data rectype) -> Mirror doctype -> Mirror doctype
+attachFilterDelta =
+  attachDelta__
+
+
+attachSynch__ : (String -> rectype -> Maybe doctype) -> DB.Group (DB.Data rectype) -> Mirror doctype -> Mirror doctype
+attachSynch__ maybeMirror group (MirrorState priorState as priorShell) =
   let
-    toDoc key dat whc = Resource.therefore (fmirror key) (whc dat)
+    mirrorResource key =
+      Resource.deriveKnown
+        (maybeMirror key >> Maybe.map Resource.def >> Maybe.withDefault Resource.void)
+
+
+    toDoc key dat whc = mirrorResource key (whc dat)
     docPair key dat = toDoc key dat |> \f -> (f fst, f snd)
 
     getRes (MirrorState q) key =
@@ -196,21 +223,25 @@ attachSynch fmirror group (MirrorState priorState as priorShell) =
       (\key {value} shell' ->
         mirrorDelta__ key
           ( getRes shell' key
-          , Resource.therefore (fmirror key) value
+          , mirrorResource key value
           ) shell'
       ) shell (DB.getGroupCurrentData group)
 
 
-{-| Apply the currently pending set of group deltas to a mirror. -}
-attachDelta : (String -> rectype -> doctype) -> DB.Group (DB.Data rectype) -> Mirror doctype -> Mirror doctype
-attachDelta mirror group (MirrorState priorState as priorShell) =
+attachDelta__ : (String -> rectype -> Maybe doctype) -> DB.Group (DB.Data rectype) -> Mirror doctype -> Mirror doctype
+attachDelta__ maybeMirror group (MirrorState priorState as priorShell) =
   let
-    toDoc key dat whc = Resource.therefore (mirror key) (whc dat)
+    mirrorResource key =
+      Resource.deriveKnown
+        (maybeMirror key >> Maybe.map Resource.def >> Maybe.withDefault Resource.void)
+
+    toDoc key dat whc = mirrorResource key (whc dat)
     docPair key dat = toDoc key dat |> \f -> (f fst, f snd)
 
     currentData key =
       DB.getGroupSubData key group
-      |> Resource.therefore (mirror key)
+      |> mirrorResource key
+
 
     priorRes key =
       Dict.get key priorState.resultRefs
