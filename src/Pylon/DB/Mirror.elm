@@ -36,6 +36,7 @@ module Pylon.DB.Mirror
   , deltas
 
   , refresh
+  , resynch
   , attach
   , attachSynch, attachFilterSynch
   , attachDelta, attachFilterDelta
@@ -63,7 +64,7 @@ module Pylon.DB.Mirror
 @docs refs, changedRefs, deltas
 
 # Mirroring
-@docs refresh, attach, attachSynch, attachDelta, attachFilterSynch, attachFilterDelta, forward
+@docs refresh, resynch, attach, attachSynch, attachDelta, attachFilterSynch, attachFilterDelta, forward
 
 # Control
 @docs inject, commit
@@ -140,6 +141,13 @@ refresh keys priorShell =
       else
         shell
     ) priorShell keys
+
+
+{-| Emit all known values as deltas. This will cause any that forwards from this mirror and any
+group that uses this mirror as a controller by deltas will be brought up to date. -}
+resynch : Mirror doctype -> Mirror doctype
+resynch (MirrorState priorState as priorShell) =
+  Dict.foldr (\key -> Resource.def >> inject key) priorShell priorState.resultRefs_
 
 
 {-| Accept the current changes. -}
