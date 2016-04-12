@@ -33,6 +33,8 @@ module Pylon.DB.Group
   , GroupConfig
   , Group
 
+  , groupConfig
+
   , getGroupSubFeedbackKey
   , extractGroupSubFeedbackKeys
   , getGroupSubFeedback
@@ -80,6 +82,9 @@ or even a compatible API fitting the same pattern such that this system is easil
 
 # Types
 @docs GroupFeedback, GroupConfig, Group
+
+# Configuration
+@docs groupConfig
 
 # Inspect Subfeedback
 @docs getGroupSubFeedbackKey, extractGroupSubFeedbackKeys, getGroupSubFeedback, getGroupSubFeedbackPair, extractGroupSubFeedbackPairs
@@ -198,6 +203,14 @@ extractGroupSubFeedbackPairs =
 type alias GroupConfig subfeedback subbinding =
   { binding : Signal.Address (List (GroupFeedback subfeedback)) -> String -> subbinding
   , address : Signal.Address (List (GroupFeedback subfeedback))
+  }
+
+
+{-| Construct a new group configuration. -}
+groupConfig : Signal.Address (List (GroupFeedback subfeedback)) -> (Signal.Address (List subfeedback) -> String -> subbinding) -> GroupConfig subfeedback subbinding
+groupConfig address fbinding =
+  { address = address
+  , binding = flip (\key -> flip Signal.forwardTo (List.map <| GroupSub key) >> flip fbinding key)
   }
 
 
