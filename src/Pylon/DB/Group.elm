@@ -33,6 +33,12 @@ module Pylon.DB.Group
   , GroupConfig
   , Group
 
+  , getGroupSubFeedbackKey
+  , extractGroupSubFeedbackKeys
+  , getGroupSubFeedback
+  , getGroupSubFeedbackPair
+  , extractGroupSubFeedbackPairs
+
   , getGroupCurrentData
   , getGroupDeltaData
   , getGroupDataResDeltas
@@ -74,6 +80,9 @@ or even a compatible API fitting the same pattern such that this system is easil
 
 # Types
 @docs GroupFeedback, GroupConfig, Group
+
+# Inspect Subfeedback
+@docs getGroupSubFeedbackKey, extractGroupSubFeedbackKeys, getGroupSubFeedback, getGroupSubFeedbackPair, extractGroupSubFeedbackPairs
 
 # Direct Group Inquiry
 @docs getGroupCurrentData, getGroupDeltaData, getGroupDataResDeltas, getGroupDataResDeltaList, groupDataResDeltaFoldL, groupDataResDeltaFoldR, groupDeriveSub, getGroupSub, getGroupSubData
@@ -137,6 +146,52 @@ type GroupFeedback subfeedback =
 
   | GroupReserved GroupFeedbackReserved_
 
+
+{-| Get the key of the subfeedback in a given GroupFeedback if applicable. -}
+getGroupSubFeedbackKey : GroupFeedback subfeedback -> Maybe String
+getGroupSubFeedbackKey feedback =
+  case feedback of
+    GroupAdd key -> Just key
+    GroupRemove key -> Just key
+    GroupRefresh key -> Just key
+    GroupSub key _ -> Just key
+    _ -> Nothing
+
+
+{-| Extract all unique keys from a list of GroupFeedbacks. -}
+extractGroupSubFeedbackKeys : List (GroupFeedback subfeedback) -> List String
+extractGroupSubFeedbackKeys =
+  List.foldr
+    (\feedback ((list, set) as pair) ->
+      getGroupSubFeedbackKey feedback
+      |> Maybe.map
+          (\key ->
+            if Set.member key set then pair
+            else (key :: list, Set.insert key set))
+      |> Maybe.withDefault pair
+    ) ([], Set.empty) >> fst
+
+
+{-| Get the subfeedback in a given GroupFeedback if applicable. -}
+getGroupSubFeedback : GroupFeedback subfeedback -> Maybe subfeedback
+getGroupSubFeedback feedback =
+  case feedback of
+    GroupSub _ feedback' -> Just feedback'
+    _ -> Nothing
+
+
+{-| Get the subfeedback and it's associated key `(key, feedback')` in a given GroupFeedback if applicable. -}
+getGroupSubFeedbackPair : GroupFeedback subfeedback -> Maybe (String, subfeedback)
+getGroupSubFeedbackPair feedback =
+  case feedback of
+    GroupSub key feedback' -> Just (key, feedback')
+    _ -> Nothing
+
+
+{-| Extract all `(key, feedback')` pairs from a list of GroupFeedbacks. -}
+extractGroupSubFeedbackPairs : List (GroupFeedback subfeedback) -> List (String, subfeedback)
+extractGroupSubFeedbackPairs =
+  List.filterMap getGroupSubFeedbackPair
 
 
 {-| Specifies the binding behavior and mailbox address for a groupIntegrate -}
