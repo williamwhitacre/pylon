@@ -326,7 +326,11 @@ groupMirror newSub (MirrorState sourceState as sourceShell) config group =
       (List.foldr
         (\(prior, curr) (group', tasks) ->
           case (prior, curr) of
-            (Resource.Known _, Resource.Known _) -> (DB.groupUpdateSub identity key group', Signal.send config.address [DB.GroupRefresh key] :: tasks)
+            (Resource.Known _, Resource.Known _) ->
+              ( DB.groupAddSub newSub key group'
+                |> DB.groupUpdateSub identity key
+              , Signal.send config.address [DB.GroupRefresh key] :: tasks
+              )
             (_, Resource.Known _) -> (DB.groupAddSub newSub key group', Signal.send config.address [DB.GroupRefresh key] :: tasks)
             (Resource.Known _, _) -> (DB.groupRemoveSub key group', Signal.send config.address [DB.GroupRefresh key] :: tasks)
             (_, _) -> (group', tasks)
