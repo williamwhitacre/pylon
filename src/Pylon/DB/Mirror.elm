@@ -46,6 +46,9 @@ module Pylon.DB.Mirror
 
   , bindMirror
   , groupMirror
+  , groupMirrorSynch
+  , dataGroupMirror
+  , dataGroupMirrorSynch
   ) where
 
 {-| A binding for ElmTextSearch and Pylon.DB.Group.
@@ -66,7 +69,7 @@ module Pylon.DB.Mirror
 @docs inject, commit
 
 # Group Binding
-@docs bindMirror, groupMirror
+@docs bindMirror, groupMirror, groupMirror, groupMirrorSynch, dataGroupMirror, dataGroupMirrorSynch
 
 -}
 
@@ -324,6 +327,29 @@ groupMirror newSub (MirrorState sourceState as sourceShell) config group =
     )
     (group, [])
     sourceState.deltas
+
+
+{-| -}
+dataGroupMirror : Mirror doctype -> DB.GroupConfig (DB.Feedback v) (DB.Binding v) -> DB.Group (DB.Data v) -> (DB.Group (DB.Data v), List (DB.DBTask never))
+dataGroupMirror =
+  groupMirror DB.newData
+
+
+{-| Use this in place of groupSubscription to synchronize the group's keys to a mirror. -}
+groupMirrorSynch : subtype -> (subtype -> (subtype, List (DB.DBTask never))) -> Mirror doctype -> DB.GroupConfig subfeedback subbinding -> DB.Group subtype -> (DB.Group subtype, List (DB.DBTask never))
+groupMirrorSynch newSub cancelSub (MirrorState sourceState as sourceShell) config group =
+  Dict.foldr
+    (\key curr (group', tasks) ->
+      (DB.groupAddSub newSub key group', Signal.send config.address [DB.GroupRefresh key] :: tasks)
+    )
+    (DB.cancelAndResetGroup cancelSub group)
+    sourceState.resultRefs_
+
+
+{-| -}
+dataGroupMirrorSynch : Mirror doctype -> DB.GroupConfig (DB.Feedback v) (DB.Binding v) -> DB.Group (DB.Data v) -> (DB.Group (DB.Data v), List (DB.DBTask never))
+dataGroupMirrorSynch =
+  groupMirrorSynch DB.newData DB.cancel
 
 
 updateMirrorDeltas__ : String -> (Resource DB.DBError doctype, Resource DB.DBError doctype) -> Mirror doctype -> Mirror doctype
