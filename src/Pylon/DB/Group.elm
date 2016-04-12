@@ -34,6 +34,7 @@ module Pylon.DB.Group
   , Group
 
   , groupConfig
+  , groupConfigForward
 
   , getGroupSubFeedbackKey
   , extractGroupSubFeedbackKeys
@@ -84,7 +85,7 @@ or even a compatible API fitting the same pattern such that this system is easil
 @docs GroupFeedback, GroupConfig, Group
 
 # Configuration
-@docs groupConfig
+@docs groupConfig, groupConfigForward
 
 # Inspect Subfeedback
 @docs getGroupSubFeedbackKey, extractGroupSubFeedbackKeys, getGroupSubFeedback, getGroupSubFeedbackPair, extractGroupSubFeedbackPairs
@@ -212,6 +213,11 @@ groupConfig address fbinding =
   { address = address
   , binding = flip (\key -> flip Signal.forwardTo (List.map <| GroupSub key) >> flip fbinding key)
   }
+
+{-| Construct a new group configuration with an action forwarding function. -}
+groupConfigForward : (List (GroupFeedback subfeedback) -> List action) -> Signal.Address (List action) -> (Signal.Address (List subfeedback) -> String -> subbinding) -> GroupConfig subfeedback subbinding
+groupConfigForward factions address =
+  groupConfig (Signal.forwardTo address factions)
 
 
 {-| Nested group record. -}
