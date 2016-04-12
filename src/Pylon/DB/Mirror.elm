@@ -315,9 +315,9 @@ groupMirror newSub (MirrorState sourceState as sourceShell) config group =
       (List.foldr
         (\(prior, curr) tasks ->
           case (prior, curr) of
-            (Resource.Known _, Resource.Known _) -> Signal.send config.address [DB.GroupAdd key] :: tasks
-            (_, Resource.Known _) -> Signal.send config.address [DB.GroupAdd key] :: tasks
-            (Resource.Known _, _) -> Signal.send config.address [DB.GroupRemove key] :: tasks
+            (Resource.Known _, Resource.Known _) -> Signal.send config.address [DB.GroupAdd key |> Debug.log "GROUP MIRROR IS SENDING"] :: tasks
+            (_, Resource.Known _) -> Signal.send config.address [DB.GroupAdd key |> Debug.log "GROUP MIRROR IS SENDING"] :: tasks
+            (Resource.Known _, _) -> Signal.send config.address [DB.GroupRemove key |> Debug.log "GROUP MIRROR IS SENDING"] :: tasks
             (_, _) -> tasks
         )
       )
