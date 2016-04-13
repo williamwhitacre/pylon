@@ -1,0 +1,53 @@
+Comparing williamwhitacre/pylon 6.10.0 to local changes...
+This is a MAJOR change.
+
+------ Changes to module Pylon.DB.Group - MAJOR ------
+
+    Added:
+        type GroupConfig subfeedback subbinding
+        groupConfigBinding : Pylon.DB.Group.GroupConfig subfeedback subbinding -> String -> subbinding
+        groupConfigDefaultLocation : ElmFire.Location -> Pylon.DB.Group.GroupConfig subfeedback subbinding -> Pylon.DB.Group.GroupConfig subfeedback subbinding
+        groupConfigGetAddress : Pylon.DB.Group.GroupConfig subfeedback subbinding -> Signal.Address (List (Pylon.DB.Group.GroupFeedback subfeedback))
+        groupConfigGetLocation : Pylon.DB.Group.GroupConfig subfeedback subbinding -> Maybe.Maybe ElmFire.Location
+        groupConfigGetPath : Pylon.DB.Group.GroupConfig subfeedback subbinding -> List String
+        groupConfigHasLocation : Pylon.DB.Group.GroupConfig subfeedback subbinding -> Bool
+        groupConfigInputKey : String -> Pylon.DB.Group.GroupConfig subfeedback subbinding -> Pylon.DB.Group.GroupConfig subfeedback subbinding
+        groupConfigLocation : ElmFire.Location -> Pylon.DB.Group.GroupConfig subfeedback subbinding -> Pylon.DB.Group.GroupConfig subfeedback subbinding
+        groupConfigLocationOr : Pylon.DB.Group.GroupConfig subfeedback subbinding -> ElmFire.Location -> ElmFire.Location
+        groupConfigNoLocation : Pylon.DB.Group.GroupConfig subfeedback subbinding -> Pylon.DB.Group.GroupConfig subfeedback subbinding
+        groupConfigParentLocation : Pylon.DB.Group.GroupConfig subfeedback subbinding -> Pylon.DB.Group.GroupConfig subfeedback subbinding
+        groupConfigPopKey : Pylon.DB.Group.GroupConfig subfeedback subbinding -> Pylon.DB.Group.GroupConfig subfeedback subbinding
+        groupConfigRootLocation : Pylon.DB.Group.GroupConfig subfeedback subbinding -> Pylon.DB.Group.GroupConfig subfeedback subbinding
+        groupConfigSetPath : List String -> Pylon.DB.Group.GroupConfig subfeedback subbinding -> Pylon.DB.Group.GroupConfig subfeedback subbinding
+        groupConfigSubLocation : String -> Pylon.DB.Group.GroupConfig subfeedback subbinding -> Pylon.DB.Group.GroupConfig subfeedback subbinding
+        groupConfigTopKey : Pylon.DB.Group.GroupConfig subfeedback subbinding -> Maybe.Maybe String
+
+    Removed:
+        type alias GroupConfig subfeedback subbinding =
+            { binding : Signal.Address (List (Pylon.DB.Group.GroupFeedback subfeedback)) -> String -> subbinding,
+              address : Signal.Address (List (Pylon.DB.Group.GroupFeedback subfeedback))
+            }
+
+    Changed:
+      - groupConfig : Signal.Address (List (Pylon.DB.Group.GroupFeedback subfeedback)) -> (Signal.Address (List subfeedback) -> String -> subbinding) -> Pylon.DB.Group.GroupConfig subfeedback subbinding
+      + groupConfig : Signal.Address (List (Pylon.DB.Group.GroupFeedback subfeedback)) -> (Signal.Address (List subfeedback) -> Maybe.Maybe ElmFire.Location -> String -> subbinding) -> Pylon.DB.Group.GroupConfig subfeedback subbinding
+
+      - groupConfigForward : (List (Pylon.DB.Group.GroupFeedback subfeedback) -> List action) -> Signal.Address (List action) -> (Signal.Address (List subfeedback) -> String -> subbinding) -> Pylon.DB.Group.GroupConfig subfeedback subbinding
+      + groupConfigForward : (List (Pylon.DB.Group.GroupFeedback subfeedback) -> List action) -> Signal.Address (List action) -> (Signal.Address (List subfeedback) -> Maybe.Maybe ElmFire.Location -> String -> subbinding) -> Pylon.DB.Group.GroupConfig subfeedback subbinding
+
+      - groupSubscription : ElmFire.Location -> ElmFire.OrderOptions -> Pylon.DB.Group.GroupConfig subfeedback subbinding -> Pylon.DB.Group.Group subtype -> (Pylon.DB.Group.Group subtype, List (Pylon.DB.DBTask never))
+      + groupSubscription : ElmFire.OrderOptions -> Pylon.DB.Group.GroupConfig subfeedback subbinding -> Pylon.DB.Group.Group subtype -> (Pylon.DB.Group.Group subtype, List (Pylon.DB.DBTask never))
+
+
+
+------ Changes to module Pylon.DB.Mirror - MAJOR ------
+
+    Removed:
+        bindMirrorConfig : (Signal.Address (List subfeedback) -> String -> doctype -> subbinding) -> Pylon.DB.Mirror.Mirror doctype -> Signal.Address (List subfeedback) -> String -> subbinding
+
+    Changed:
+      - bindMirror : (String -> doctype -> subbinding) -> Pylon.DB.Mirror.Mirror doctype -> Signal.Address (List (Pylon.DB.Group.GroupFeedback subfeedback)) -> String -> subbinding
+      + bindMirror : (Signal.Address (List subfeedback) -> Maybe.Maybe ElmFire.Location -> String -> doctype -> subbinding) -> Pylon.DB.Mirror.Mirror doctype -> Signal.Address (List subfeedback) -> Maybe.Maybe ElmFire.Location -> String -> subbinding
+
+
+
