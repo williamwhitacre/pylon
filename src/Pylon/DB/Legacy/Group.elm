@@ -156,13 +156,11 @@ groupSubscriber
   -> (GroupBinding subfeedback -> String -> subbinding)
   -> GroupBinding subfeedback -> Group subtype -> (Group subtype, List (DB.DBTask never))
 groupSubscriber cancelSub integrateSub bindSub' binding priorGroup =
-  let
-    groupConfig =
-      { binding = (\_ -> bindSub' binding)
-      , address = binding.address
-      }
+  groupIntegrate
+    [ groupSubscription binding.ordering
+    ] cancelSub integrateSub
 
-  in
-    groupIntegrate
-      [ groupSubscription binding.location binding.ordering
-      ] cancelSub integrateSub groupConfig priorGroup
+    (groupConfig binding.address (\addr_ loc_ -> bindSub' binding)
+    |> groupConfigLocation binding.location)
+
+    priorGroup

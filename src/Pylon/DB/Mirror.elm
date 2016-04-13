@@ -46,7 +46,6 @@ module Pylon.DB.Mirror
   , commit
 
   , bindMirror
-  , bindMirrorConfig
   , groupMirror
   , groupMirrorSynch
   , dataGroupMirror
@@ -71,7 +70,7 @@ module Pylon.DB.Mirror
 @docs inject, commit
 
 # Group Binding
-@docs bindMirror, bindMirrorConfig, groupMirror, groupMirror, groupMirrorSynch, dataGroupMirror, dataGroupMirrorSynch
+@docs bindMirror, groupMirror, groupMirror, groupMirrorSynch, dataGroupMirror, dataGroupMirrorSynch
 
 -}
 
@@ -82,6 +81,8 @@ import Pylon.Resource as Resource exposing (Resource)
 
 import Dict exposing (Dict)
 import Set exposing (Set)
+
+import ElmFire
 
 
 type alias MirrorState_ doctype =
@@ -304,26 +305,17 @@ forward mirror (MirrorState sourceState as sourceShell) (MirrorState priorState 
       sourceState.deltas
 
 
-{-| Mirror output binding function for use with GroupConfig
-
-    config =
-      { address = myAddress
-      , binding = bindMirror routeByDoc myMirror
-      }
-
--}
-bindMirror : (String -> doctype -> subbinding) -> Mirror doctype -> Signal.Address (List (DB.GroupFeedback subfeedback)) -> String -> subbinding
-bindMirror route (MirrorState sourceState as sourceShell) address key =
+{-|  -}
+bindMirror
+  :  (Signal.Address (List subfeedback) -> Maybe ElmFire.Location -> String -> doctype -> subbinding)
+  -> Mirror doctype
+  -> Signal.Address (List subfeedback)
+  -> Maybe ElmFire.Location
+  -> String
+  -> subbinding
+bindMirror route (MirrorState sourceState as sourceShell) address location key =
   case Dict.get key sourceState.resultRefs_ of
-    Just ref -> route key ref
-    Nothing -> Debug.crash ("Since the source document at " ++ key ++ " does not exist, bindMirror should never have been reached with this key.")
-
-
-{-| Same as bindMirror, but for use with groupConfig, and keeps most in scope. -}
-bindMirrorConfig : (Signal.Address (List subfeedback) -> String -> doctype -> subbinding) -> Mirror doctype -> Signal.Address (List subfeedback) -> String -> subbinding
-bindMirrorConfig route (MirrorState sourceState as sourceShell) address key =
-  case Dict.get key sourceState.resultRefs_ of
-    Just ref -> route address key ref
+    Just ref -> route address location key ref
     Nothing -> Debug.crash ("Since the source document at " ++ key ++ " does not exist, bindMirror should never have been reached with this key.")
 
 
@@ -338,10 +330,10 @@ groupMirror newSub (MirrorState sourceState as sourceShell) config group =
             (Resource.Known _, Resource.Known _) ->
               ( DB.groupAddSub newSub key group'
                 |> DB.groupUpdateSub identity key
-              , Signal.send config.address [DB.GroupRefresh key] :: tasks
+              , Signal.send (DB.groupConfigGetAddress config) [DB.GroupRefresh key] :: tasks
               )
-            (_, Resource.Known _) -> (DB.groupAddSub newSub key group', Signal.send config.address [DB.GroupRefresh key] :: tasks)
-            (Resource.Known _, _) -> (DB.groupRemoveSub key group', Signal.send config.address [DB.GroupRefresh key] :: tasks)
+            (_, Resource.Known _) -> (DB.groupAddSub newSub key group', Signal.send (DB.groupConfigGetAddress config) [DB.GroupRefresh key] :: tasks)
+            (Resource.Known _, _) -> (DB.groupRemoveSub key group', Signal.send (DB.groupConfigGetAddress config) [DB.GroupRefresh key] :: tasks)
             (_, _) -> (group', tasks)
         )
       )
@@ -361,7 +353,7 @@ groupMirrorSynch : subtype -> (subtype -> (subtype, List (DB.DBTask never))) -> 
 groupMirrorSynch newSub cancelSub (MirrorState sourceState as sourceShell) config group =
   Dict.foldr
     (\key curr (group', tasks) ->
-      (DB.groupAddSub newSub key group', Signal.send config.address [DB.GroupRefresh key] :: tasks)
+      (DB.groupAddSub newSub key group', Signal.send (DB.groupConfigGetAddress config) [DB.GroupRefresh key] :: tasks)
     )
     (DB.cancelAndResetGroup cancelSub group)
     sourceState.resultRefs_

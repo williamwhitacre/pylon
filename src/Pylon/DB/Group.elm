@@ -35,6 +35,23 @@ module Pylon.DB.Group
 
   , groupConfig
   , groupConfigForward
+  , groupConfigBinding
+  , groupConfigGetAddress
+
+  , groupConfigLocation
+  , groupConfigDefaultLocation
+  , groupConfigInputKey
+  , groupConfigPopKey
+  , groupConfigTopKey
+  , groupConfigGetPath
+  , groupConfigSetPath
+  , groupConfigNoLocation
+  , groupConfigParentLocation
+  , groupConfigSubLocation
+  , groupConfigRootLocation
+  , groupConfigHasLocation
+  , groupConfigGetLocation
+  , groupConfigLocationOr
 
   , getGroupSubFeedbackKey
   , extractGroupSubFeedbackKeys
@@ -85,7 +102,7 @@ or even a compatible API fitting the same pattern such that this system is easil
 @docs GroupFeedback, GroupConfig, Group
 
 # Configuration
-@docs groupConfig, groupConfigForward
+@docs groupConfig, groupConfigForward, groupConfigBinding, groupConfigGetAddress, groupConfigLocation, groupConfigDefaultLocation, groupConfigInputKey, groupConfigPopKey, groupConfigTopKey, groupConfigGetPath, groupConfigSetPath, groupConfigNoLocation, groupConfigParentLocation, groupConfigSubLocation, groupConfigRootLocation, groupConfigHasLocation, groupConfigGetLocation, groupConfigLocationOr
 
 # Inspect Subfeedback
 @docs getGroupSubFeedbackKey, extractGroupSubFeedbackKeys, getGroupSubFeedback, getGroupSubFeedbackPair, extractGroupSubFeedbackPairs
@@ -153,6 +170,212 @@ type GroupFeedback subfeedback =
   | GroupReserved GroupFeedbackReserved_
 
 
+type alias GroupConfigData =
+  { inputKeys_ : List String
+  }
+
+
+{-| Specifies the binding behavior and mailbox address for a groupIntegrate -}
+type GroupConfig subfeedback subbinding =
+  GroupConfig
+    { binding : GroupConfig subfeedback subbinding -> String -> subbinding
+    , address : Signal.Address (List (GroupFeedback subfeedback))
+    , location : Maybe ElmFire.Location
+    , data_ : GroupConfigData
+    }
+
+
+{-| Nested group record. -}
+type alias Group subtype =
+  { dataDelta : Dict String (subtype, GroupDelta)
+  , data : Resource DB.DBError (Dict String subtype)
+
+  , addSubscription : Resource DB.DBError ElmFire.Subscription
+  , removeSubscription : Resource DB.DBError ElmFire.Subscription
+
+  , currentLocation : Maybe ElmFire.Location
+  }
+
+
+{-| TODO: write docs -}
+groupConfigBinding : GroupConfig subfeedback subbinding -> String -> subbinding
+groupConfigBinding (GroupConfig config as shell) = config.binding shell
+
+
+{-| TODO: write docs -}
+groupConfigGetAddress : GroupConfig subfeedback subbinding -> Signal.Address (List (GroupFeedback subfeedback))
+groupConfigGetAddress (GroupConfig config as shell) = config.address
+
+
+{-| Construct a new group configuration. -}
+groupConfig
+  :  Signal.Address (List (GroupFeedback subfeedback))
+  -> (Signal.Address (List subfeedback) -> Maybe ElmFire.Location -> String -> subbinding)
+  -> GroupConfig subfeedback subbinding
+groupConfig address fbinding =
+  GroupConfig
+    { address = address
+    , location = Nothing
+    , binding =
+        (\(GroupConfig self) key -> fbinding
+          (List.map (GroupSub key)
+          |> Signal.forwardTo self.address)
+
+          self.location
+          key)
+    , data_ = { inputKeys_ = [] }
+    }
+
+
+{-| Construct a new group configuration with an action forwarding function. -}
+groupConfigForward
+  :  (List (GroupFeedback subfeedback) -> List action)
+  -> Signal.Address (List action)
+  -> (Signal.Address (List subfeedback) -> Maybe ElmFire.Location -> String -> subbinding)
+  -> GroupConfig subfeedback subbinding
+groupConfigForward factions address =
+  groupConfig (Signal.forwardTo address factions)
+
+
+{-| TODO: write docs -}
+groupConfigLocation : ElmFire.Location -> GroupConfig subfeedback subbinding -> GroupConfig subfeedback subbinding
+groupConfigLocation location (GroupConfig config as shell) =
+  GroupConfig
+    { config
+    | location = Just location
+    }
+
+
+{-| TODO: write docs -}
+groupConfigDefaultLocation : ElmFire.Location -> GroupConfig subfeedback subbinding -> GroupConfig subfeedback subbinding
+groupConfigDefaultLocation location (GroupConfig config as shell) =
+  if config.location /= Nothing then
+    shell
+  else
+    GroupConfig
+      { config
+      | location = Just location
+      }
+
+
+{-| TODO: write docs -}
+groupConfigInputKey : String -> GroupConfig subfeedback subbinding -> GroupConfig subfeedback subbinding
+groupConfigInputKey key (GroupConfig config) =
+  let data_ = config.data_ in
+    GroupConfig
+      { config
+      | data_ = { data_ | inputKeys_ = key :: data_.inputKeys_ }
+      }
+
+
+{-| TODO: write docs -}
+groupConfigPopKey : GroupConfig subfeedback subbinding -> GroupConfig subfeedback subbinding
+groupConfigPopKey (GroupConfig config as shell) =
+  let data_ = config.data_ in
+    Maybe.map
+      (\ls' ->
+        GroupConfig
+          { config
+          | data_ = { data_ | inputKeys_ = ls' }
+          }
+      ) (List.tail data_.inputKeys_)
+    |> Maybe.withDefault shell
+
+
+{-| TODO: write docs -}
+groupConfigTopKey : GroupConfig subfeedback subbinding -> Maybe String
+groupConfigTopKey (GroupConfig config as shell) = List.head config.data_.inputKeys_
+
+
+{-| TODO: write docs -}
+groupConfigGetPath : GroupConfig subfeedback subbinding -> List String
+groupConfigGetPath (GroupConfig config as shell) = List.reverse config.data_.inputKeys_
+
+
+{-| TODO: write docs -}
+groupConfigSetPath : List String -> GroupConfig subfeedback subbinding -> GroupConfig subfeedback subbinding
+groupConfigSetPath path (GroupConfig config as shell) =
+  let data_ = config.data_ in
+    GroupConfig
+      { config
+      | data_ = { data_ | inputKeys_ = List.reverse path }
+      }
+
+
+-- does not effect keys.
+{-| TODO: write docs -}
+groupConfigNoLocation : GroupConfig subfeedback subbinding -> GroupConfig subfeedback subbinding
+groupConfigNoLocation (GroupConfig config as shell) =
+  if config.location == Nothing then
+    shell
+  else
+    GroupConfig
+      { config
+      | location = Nothing
+      }
+
+-- parent location will not work for a non-relative path, however, rooting everything will
+-- effectively reset to a valid state.
+{-| TODO: write docs -}
+groupConfigParentLocation : GroupConfig subfeedback subbinding -> GroupConfig subfeedback subbinding
+groupConfigParentLocation (GroupConfig config as shell) =
+  case Maybe.map ElmFire.root config.location of
+    Nothing -> groupConfigPopKey shell
+    Just root ->
+      GroupConfig
+        { config
+        | location =
+            Maybe.map ElmFire.root config.location
+            |> Maybe.map (flip (List.foldr ElmFire.sub) config.data_.inputKeys_)
+        }
+      |> groupConfigPopKey
+
+
+{-| TODO: write docs -}
+groupConfigSubLocation : String -> GroupConfig subfeedback subbinding -> GroupConfig subfeedback subbinding
+groupConfigSubLocation key (GroupConfig config as shell) =
+  let data_ = config.data_ in
+    GroupConfig
+      { config
+      | location = Maybe.map (ElmFire.sub key) config.location
+      , data_ = { data_ | inputKeys_ = key :: data_.inputKeys_ }
+      }
+
+
+{-| TODO: write docs -}
+groupConfigRootLocation : GroupConfig subfeedback subbinding -> GroupConfig subfeedback subbinding
+groupConfigRootLocation (GroupConfig config as shell) =
+  let data_ = config.data_ in
+    GroupConfig
+      { config
+      | location = Maybe.map ElmFire.root config.location
+      , data_ =  { data_ | inputKeys_ = [] }
+      }
+
+
+{-| TODO: write docs -}
+groupConfigHasLocation : GroupConfig subfeedback subbinding -> Bool
+groupConfigHasLocation (GroupConfig config as shell) =
+  config.location /= Nothing
+
+
+{-| TODO: write docs -}
+groupConfigGetLocation : GroupConfig subfeedback subbinding -> Maybe ElmFire.Location
+groupConfigGetLocation (GroupConfig config as shell) =
+  config.location
+
+
+{-| TODO: write docs -}
+groupConfigLocationOr : GroupConfig subfeedback subbinding -> ElmFire.Location -> ElmFire.Location
+groupConfigLocationOr (GroupConfig config as shell) =
+  flip Maybe.withDefault config.location
+
+
+
+
+-- INQUIRE ABOUT GROUP FEEDBACK
+
+
 {-| Get the key of the subfeedback in a given GroupFeedback if applicable. -}
 getGroupSubFeedbackKey : GroupFeedback subfeedback -> Maybe String
 getGroupSubFeedbackKey feedback =
@@ -199,37 +422,6 @@ extractGroupSubFeedbackPairs : List (GroupFeedback subfeedback) -> List (String,
 extractGroupSubFeedbackPairs =
   List.filterMap getGroupSubFeedbackPair
 
-
-{-| Specifies the binding behavior and mailbox address for a groupIntegrate -}
-type alias GroupConfig subfeedback subbinding =
-  { binding : Signal.Address (List (GroupFeedback subfeedback)) -> String -> subbinding
-  , address : Signal.Address (List (GroupFeedback subfeedback))
-  }
-
-
-{-| Construct a new group configuration. -}
-groupConfig : Signal.Address (List (GroupFeedback subfeedback)) -> (Signal.Address (List subfeedback) -> String -> subbinding) -> GroupConfig subfeedback subbinding
-groupConfig address fbinding =
-  { address = address
-  , binding = flip (\key -> flip Signal.forwardTo (List.map <| GroupSub key) >> flip fbinding key)
-  }
-
-{-| Construct a new group configuration with an action forwarding function. -}
-groupConfigForward : (List (GroupFeedback subfeedback) -> List action) -> Signal.Address (List action) -> (Signal.Address (List subfeedback) -> String -> subbinding) -> GroupConfig subfeedback subbinding
-groupConfigForward factions address =
-  groupConfig (Signal.forwardTo address factions)
-
-
-{-| Nested group record. -}
-type alias Group subtype =
-  { dataDelta : Dict String (subtype, GroupDelta)
-  , data : Resource DB.DBError (Dict String subtype)
-
-  , addSubscription : Resource DB.DBError ElmFire.Subscription
-  , removeSubscription : Resource DB.DBError ElmFire.Subscription
-
-  , currentLocation : Maybe (ElmFire.Location)
-  }
 
 -- GROUP MANIPULATION AND INQUIRY
 
@@ -427,6 +619,8 @@ groupRemoveSub key group =
       |> Maybe.withDefault group
 
 
+-- CONSTRUCTORS
+
 {-| A new group item. -}
 newGroup : Group subtype
 newGroup =
@@ -453,6 +647,8 @@ voidGroup =
   }
 
 
+
+-- HANDLING SIGNAL FEEDBACK
 
 {-| Group feedback update function accepting one `DB.Feedback`. -}
 groupInputOne : subtype -> (subfeedback -> subtype -> subtype) -> GroupFeedback subfeedback -> Group subtype -> Group subtype
@@ -532,6 +728,12 @@ groupDataInputOne =
   groupInputOne DB.newData DB.inputOne
 
 
+{-| Convenient way of declaring a nested group input function. -}
+groupNestedInputOne : subtype -> (subfeedback -> subtype -> subtype) -> GroupFeedback (GroupFeedback subfeedback) -> Group (Group subtype) -> Group (Group subtype)
+groupNestedInputOne newSub inputSub =
+  groupInputOne newSub inputSub
+  |> groupInputOne newGroup
+
 {-| Group feedback update function accepting a list of `DB.Feedback`. -}
 groupInput : subtype -> (subfeedback -> subtype -> subtype) -> List (GroupFeedback subfeedback) -> Group subtype -> Group subtype
 groupInput subNew subInput feedbacks group =
@@ -542,6 +744,16 @@ groupInput subNew subInput feedbacks group =
 groupDataInput : List (GroupFeedback (DB.Feedback v)) -> Group (DB.Data v) -> Group (DB.Data v)
 groupDataInput =
   groupInput DB.newData DB.inputOne
+
+
+{-| Convenient way of declaring a nested group input list function. -}
+groupNestedInput : subtype -> (subfeedback -> subtype -> subtype) -> List (GroupFeedback (GroupFeedback subfeedback)) -> Group (Group subtype) -> Group (Group subtype)
+groupNestedInput newSub inputSub =
+  groupInputOne newSub inputSub
+  |> groupInput newGroup
+
+
+-- CANCEL AND RESET
 
 
 {-| Cancel a `Group`'s active subscription if any, resulting in a `Group` that is not effected by
@@ -595,6 +807,13 @@ cancelDataGroup : Group (DB.Data v) -> (Group (DB.Data v), List (DB.DBTask never
 cancelDataGroup =
   cancelGroup DB.cancel
 
+{-| Convenient way of declaring a nested cancellation function. -}
+cancelNestedGroup : (subtype -> (subtype, List (DB.DBTask never))) -> Group (Group subtype) -> (Group (Group subtype), List (DB.DBTask never))
+cancelNestedGroup cancelSub =
+  cancelGroup cancelSub
+  |> cancelGroup
+
+
 {-| Reset a `Group`, such that the next time a `group*Subscriber` is reached, the `Group` will be
 rebound to the given `GroupBinding`.  -}
 resetGroup : Group subtype -> Group subtype
@@ -612,6 +831,7 @@ resetGroup group =
   }
 
 
+
 {-| Convenience function for cancelling and resetting a group at once, such that the next time
 a `group*Subscriber` is reached, it will be immediately rebound. -}
 cancelAndResetGroup : (subtype -> (subtype, List (DB.DBTask never))) -> Group subtype -> (Group subtype, List (DB.DBTask never))
@@ -626,6 +846,14 @@ time a `group*Subscriber` is reached, it will be immediately rebound. -}
 cancelAndResetDataGroup : Group (DB.Data v) -> (Group (DB.Data v), List (DB.DBTask never))
 cancelAndResetDataGroup =
   cancelAndResetGroup DB.cancel
+
+
+cancelAndResetNestedGroup : (subtype -> (subtype, List (DB.DBTask never))) -> Group (Group subtype) -> (Group (Group subtype), List (DB.DBTask never))
+cancelAndResetNestedGroup cancelSub group =
+  cancelNestedGroup cancelSub group
+  |> \(group', tasks) -> resetGroup group'
+  |> flip (,) (App.finalizeTasks App.sequence tasks)
+
 
 
 -- REMOVED IN 5.0.0
@@ -650,6 +878,10 @@ commitGroup cancelSub subscribeSub group =
   |> \(group'', tasks'') -> (group'', App.finalizeTasks App.parallel tasks'')
 
 
+
+-- INTEGRATION
+
+
 {-| Convenient short version for groups of just data. This equivalency holds:
 
     groupDataIntegrate controllers =
@@ -664,65 +896,111 @@ groupDataIntegrate controllers =
   groupIntegrate controllers DB.cancel DB.subscribe
 
 
-{-| This is a more configurable version of groupSubscriber. It is now the underlying code for
-groupSubscriber. `groupSubscriber` is depreciated in favor of this. The rationale
-for this piece is to allow total abstraction of the group source. I ran in to difficulties in
-reusing group to mirror changes in local information, such as Mirrors (see DB.Mirror). -}
+{-| Integrate a group using the given controller functions, a configuration with the sub-binding
+function, and the address to send GroupFeedback to.
+
+This is a more configurable version of groupSubscriber. It is now the underlying code for
+groupSubscriber. `groupSubscriber` is depreciated in favor of this, and can be found in
+`Pylon.Legacy.Group`. -}
 groupIntegrate
   :  List (GroupConfig subfeedback subbinding -> Group subtype -> (Group subtype, List (DB.DBTask never)))
+
   -> (subtype -> (subtype, List (DB.DBTask never)))
   -> (subbinding -> subtype -> (subtype, List (DB.DBTask never)))
+
   -> GroupConfig subfeedback subbinding
-  -> Group subtype -> (Group subtype, List (DB.DBTask never))
+  -> Group subtype
+  -> (Group subtype, List (DB.DBTask never))
 groupIntegrate controllers cancelSub integrateSub config priorGroup =
   App.chain
-    (commitGroup cancelSub (config.binding config.address >> integrateSub)
+    (commitGroup cancelSub (groupConfigBinding config >> integrateSub)
     :: List.map ((|>) config) controllers)
     priorGroup
+
+
+groupNestedIntegrate
+  :  List (GroupConfig (GroupFeedback subfeedback) (GroupConfig subfeedback subbinding) -> Group (Group subtype) -> (Group (Group subtype), List (DB.DBTask never)))
+  -> List (GroupConfig subfeedback subbinding -> Group subtype -> (Group subtype, List (DB.DBTask never)))
+
+  -> (subtype -> (subtype, List (DB.DBTask never)))
+  -> (subbinding -> subtype -> (subtype, List (DB.DBTask never)))
+
+  -> GroupConfig (GroupFeedback subfeedback) (GroupConfig subfeedback subbinding)
+  -> Group (Group subtype)
+  -> (Group (Group subtype), List (DB.DBTask never))
+groupNestedIntegrate controllers subCtrl subCancel subIntegrate =
+  groupIntegrate
+    controllers
+    (cancelGroup subCancel)
+    (groupIntegrate subCtrl subCancel subIntegrate)
+
+
+{-
+groupNestedInputOne
+groupNestedInput
+
+cancelNestedGroup
+cancelAndResetNestedGroup
+
+groupNestedIntegrate
+-}
 
 
 {-| Controller for groupIntegrate that carries out the behavior groupSubscriber, which is the most
 convenient option for mirroring data from Firebase directly. Since the previous definition was
 frustratingly limited to this, I was not able to configure the group to mirror a different source,
 such as bindings derived from the data in a mirror. -}
-groupSubscription : ElmFire.Location -> ElmFire.OrderOptions -> GroupConfig subfeedback subbinding -> Group subtype -> (Group subtype, List (DB.DBTask never))
-groupSubscription location orderOptions config priorGroup =
-  let
-    fromSnapshot tag snapshot =
-      Signal.send config.address [tag snapshot.key]
+groupSubscription
+  :  ElmFire.OrderOptions
+  -> GroupConfig subfeedback subbinding
+  -> Group subtype
+  -> (Group subtype, List (DB.DBTask never))
+groupSubscription orderOptions (GroupConfig config as shell) priorGroup =
+  case config.location of
+    Just location ->
+      let
+        fromSnapshot tag snapshot =
+          Signal.send config.address [tag snapshot.key]
 
-    fromCancellation cancelTag subscriptionTag cancellation =
-      case cancellation of
-        ElmFire.Unsubscribed _ -> Signal.send config.address [cancelTag]
-        ElmFire.QueryError _ error -> Signal.send config.address [subscriptionTag error]
+        fromCancellation cancelTag subscriptionTag cancellation =
+          case cancellation of
+            ElmFire.Unsubscribed _ -> Signal.send config.address [cancelTag]
+            ElmFire.QueryError _ error -> Signal.send config.address [subscriptionTag error]
 
-    subscriptionTask (onSubs, onErr, onSnapshot, onCancellation) query' =
-      (ElmFire.subscribe onSnapshot onCancellation query' location
-        `andThen` (\subscription -> Signal.send config.address [onSubs subscription])
-        `onError` (\error -> Signal.send config.address [onErr error]))
+        subscriptionTask (onSubs, onErr, onSnapshot, onCancellation) query' =
+          (ElmFire.subscribe onSnapshot onCancellation query' location
+            `andThen` (\subscription -> Signal.send config.address [onSubs subscription])
+            `onError` (\error -> Signal.send config.address [onErr error]))
 
-    (addSubscriptionTask, removeSubscriptionTask) =
-      ( subscriptionTask
-          ( GroupSubscribedAdd, GroupAddSubscriptionError, fromSnapshot GroupAdd
-          , fromCancellation GroupCancelledAdd GroupAddSubscriptionError
+        (addSubscriptionTask, removeSubscriptionTask) =
+          ( subscriptionTask
+              ( GroupSubscribedAdd, GroupAddSubscriptionError, fromSnapshot GroupAdd
+              , fromCancellation GroupCancelledAdd GroupAddSubscriptionError
+              )
+          , subscriptionTask
+              ( GroupSubscribedRemove, GroupRemoveSubscriptionError, fromSnapshot GroupRemove
+              , fromCancellation GroupCancelledRemove GroupRemoveSubscriptionError
+              )
           )
-      , subscriptionTask
-          ( GroupSubscribedRemove, GroupRemoveSubscriptionError, fromSnapshot GroupRemove
-          , fromCancellation GroupCancelledRemove GroupRemoveSubscriptionError
-          )
-      )
 
-  in
-    App.chain
-      [ App.chain
-          [ App.chainIf (.removeSubscription >> Resource.isUnknown)
-              [ App.doEffect (always [ removeSubscriptionTask (ElmFire.childRemoved orderOptions) ])
-              , App.asEffector (\m -> { m | removeSubscription = Resource.pending })
+      in
+        App.chain
+          [ App.chain
+              [ App.asEffector (\m -> { m | currentLocation = Just location })
+              , App.chainIf (.removeSubscription >> Resource.isUnknown)
+                  [ App.doEffect (always [ removeSubscriptionTask (ElmFire.childRemoved orderOptions) ])
+                  , App.asEffector (\m -> { m | removeSubscription = Resource.pending })
+                  ]
+              , App.chainIf (.addSubscription >> Resource.isUnknown)
+                  [ App.doEffect (always [ addSubscriptionTask (ElmFire.childAdded orderOptions) ])
+                  , App.asEffector (\m -> { m | addSubscription = Resource.pending })
+                  ]
               ]
-          , App.chainIf (.addSubscription >> Resource.isUnknown)
-              [ App.doEffect (always [ addSubscriptionTask (ElmFire.childAdded orderOptions) ])
-              , App.asEffector (\m -> { m | addSubscription = Resource.pending })
-              ]
-          ]
-          |> App.finalizedEffector App.parallel
-      ] priorGroup
+              |> App.finalizedEffector App.parallel
+          ] priorGroup
+
+    Nothing ->
+      App.chain
+        [ App.asEffector (\m -> { m | currentLocation = Nothing })
+        , App.asEffector (Debug.log "Running subscription, but no location provided!")
+        ] priorGroup
