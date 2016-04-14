@@ -76,15 +76,22 @@ module Pylon.DB.Group
 
   , getGroupCurrentData
   , getGroupDeltaData
+  , getGroupResDeltas
+  , getGroupResDeltaList
   , getGroupDataResDeltas
   , getGroupDataResDeltaList
+  , groupResDeltaFoldL
+  , groupResDeltaFoldR
   , groupDataResDeltaFoldL
   , groupDataResDeltaFoldR
+  , groupDeriveDeltaFoldL
+  , groupDeriveDeltaFoldR
 
   , groupUpdateSub
   , groupDoSub
   , groupDoEachSub
   , groupAddSub
+  , groupSetSub
   , groupRemoveSub
 
   , groupDeriveSub
@@ -117,6 +124,8 @@ module Pylon.DB.Group
   , cancelAndResetGroup3
   , cancelAndResetGroup4
 
+  , flatten
+
   , groupIntegrate
   , groupIntegrate2
   , groupIntegrate3
@@ -141,7 +150,7 @@ or even a compatible API fitting the same pattern such that this system is easil
 @docs getGroupSubFeedbackKey, extractGroupSubFeedbackKeys, getGroupSubFeedback, getGroupSubFeedbackPair, extractGroupSubFeedbackPairs
 
 # Direct Group Inquiry
-@docs getGroupCurrentData, getGroupDeltaData, getGroupDataResDeltas, getGroupDataResDeltaList, groupDataResDeltaFoldL, groupDataResDeltaFoldR, groupDeriveSub, getGroupSub, getGroupSubData
+@docs getGroupCurrentData, getGroupDeltaData, getGroupResDeltas, getGroupResDeltaList, getGroupDataResDeltas, getGroupDataResDeltaList, groupResDeltaFoldL, groupResDeltaFoldR, groupDataResDeltaFoldL, groupDataResDeltaFoldR, groupDeriveDeltaFoldL, groupDeriveDeltaFoldR, groupDeriveSub, getGroupSub, getGroupSubData
 
 
 # Direct Group Manipulation
@@ -151,7 +160,7 @@ functionality to write new items in to a group. Take care, however, that you _do
 items form the group by using `groupRemoveSub` directly._ To effect the remote data, you must
 invoke the operations provided by `Pylon.DB`.
 
-@docs groupUpdateSub, groupDoSub, groupDoEachSub, groupAddSub, groupRemoveSub
+@docs groupUpdateSub, groupDoSub, groupDoEachSub, groupAddSub, groupSetSub, groupRemoveSub
 
 # Group Constructors
 @docs newGroup, voidGroup
@@ -167,6 +176,19 @@ much stronger structural flexibility. Expect `DynamicGroup` as part of Pylon 8. 
 thoroughly documented and examples made before we get around to this.
 
 @docs groupInputOne, groupInput, cancelGroup, resetGroup, cancelAndResetGroup, groupIntegrate
+
+# Group Reductions
+
+When dealing with a nested group, it can be quite a boilerplate mess to get things out dynamically.
+It is much easier to do what you want with a flat group. For example. If I have a nested group
+`Group (Group (Data MyRecord))` representing collections of records from a selection of different
+sources in the database, I can flatten that nested group in to a regular data group `Group (Data MyRecord)`
+using the `pathMerge` function to control the ordering of the results as well. I could then use a
+Mirror to generate a meaningful representation and display it to the user. This can handle a LOT of
+data because everything is a stream of deltas.
+
+@docs flatten
+
 
 # Data Group Operations
 @docs groupDataInputOne, groupDataInput, cancelDataGroup, cancelAndResetDataGroup, groupDataIntegrate
@@ -600,18 +622,51 @@ getGroupDataResDeltaList =
   groupDataResDeltaFoldR (\key pair list -> (key, pair) :: list) []
 
 
-{-| Fold from the left across the deltas, using a particular fold function and initial output. -}
+{-| Get the current change in the group's data as a dictionary of resource pairs, each representing
+the prior and current values of the data respectively. -}
+getGroupResDeltas : Group subtype -> Dict String (Resource DB.DBError subtype, Resource DB.DBError subtype)
+getGroupResDeltas =
+  groupResDeltaFoldL Dict.insert Dict.empty
+
+
+{-| Get the current change in the group's data as a list of (key, (prior, current)) structures. -}
+getGroupResDeltaList : Group subtype -> List (String, (Resource DB.DBError subtype, Resource DB.DBError subtype))
+getGroupResDeltaList =
+  groupResDeltaFoldR (\key pair list -> (key, pair) :: list) []
+
+
+{-| Fold from the left across the deltas for a data group, using a particular fold function and initial output. -}
 groupDataResDeltaFoldL : (String -> (Resource DB.DBError v, Resource DB.DBError v) -> foldout -> foldout) -> foldout -> Group (DB.Data v) -> foldout
-groupDataResDeltaFoldL = groupDataResDeltaFold False
+groupDataResDeltaFoldL = groupAnyResDeltaFold False .value
+
+
+{-| Fold from the right across the deltas for a data group, using a particular fold function and initial output. -}
+groupDataResDeltaFoldR : (String -> (Resource DB.DBError v, Resource DB.DBError v) -> foldout -> foldout) -> foldout -> Group (DB.Data v) -> foldout
+groupDataResDeltaFoldR = groupAnyResDeltaFold True .value
+
+
+{-| Fold from the left across the deltas, using a particular fold function and initial output. -}
+groupResDeltaFoldL : (String -> (Resource DB.DBError subtype, Resource DB.DBError subtype) -> foldout -> foldout) -> foldout -> Group subtype -> foldout
+groupResDeltaFoldL = groupAnyResDeltaFold False Resource.def
 
 
 {-| Fold from the right across the deltas, using a particular fold function and initial output. -}
-groupDataResDeltaFoldR : (String -> (Resource DB.DBError v, Resource DB.DBError v) -> foldout -> foldout) -> foldout -> Group (DB.Data v) -> foldout
-groupDataResDeltaFoldR = groupDataResDeltaFold True
+groupResDeltaFoldR : (String -> (Resource DB.DBError subtype, Resource DB.DBError subtype) -> foldout -> foldout) -> foldout -> Group subtype -> foldout
+groupResDeltaFoldR = groupAnyResDeltaFold True Resource.def
 
 
-groupDataResDeltaFold : Bool -> (String -> (Resource DB.DBError v, Resource DB.DBError v) -> foldout -> foldout) -> foldout -> Group (DB.Data v) -> foldout
-groupDataResDeltaFold fromRight fFold foldIn group =
+{-| Fold from the left across the deltas, given a given derivation function and using a particular fold function and initial output. -}
+groupDeriveDeltaFoldL : (subtype -> Resource DB.DBError v) -> (String -> (Resource DB.DBError v, Resource DB.DBError v) -> foldout -> foldout) -> foldout -> Group subtype -> foldout
+groupDeriveDeltaFoldL f = groupAnyResDeltaFold False f
+
+
+{-| Fold from the right across the deltas, given a given derivation function and using a particular fold function and initial output. -}
+groupDeriveDeltaFoldR : (subtype -> Resource DB.DBError v) -> (String -> (Resource DB.DBError v, Resource DB.DBError v) -> foldout -> foldout) -> foldout -> Group subtype -> foldout
+groupDeriveDeltaFoldR f = groupAnyResDeltaFold True f
+
+
+groupAnyResDeltaFold : Bool -> (subtype -> Resource DB.DBError v) -> (String -> (Resource DB.DBError v, Resource DB.DBError v) -> foldout -> foldout) -> foldout -> Group subtype -> foldout
+groupAnyResDeltaFold fromRight extractValueResource fFold foldIn group =
   let
     foldOp = if fromRight then Dict.foldr else Dict.foldl
 
@@ -619,14 +674,14 @@ groupDataResDeltaFold fromRight fFold foldIn group =
 
     priorValueOf key =
       case Dict.get key priorData of
-        Just prior -> prior.value
+        Just prior -> extractValueResource prior
         Nothing -> Resource.void
 
     deltaPairOf key (data', deltaTag) foldOut =
       (case deltaTag of
         GroupRmD  -> (priorValueOf key, Resource.void)
-        GroupSubD -> (priorValueOf key, data'.value)
-        GroupAddD -> (priorValueOf key, data'.value))
+        GroupSubD -> (priorValueOf key, extractValueResource data')
+        GroupAddD -> (priorValueOf key, extractValueResource data'))
       |> \pair -> case pair of
         (Resource.Void, Resource.Void) -> foldOut
         _ -> fFold key pair foldOut
@@ -748,6 +803,23 @@ groupAddSub subNew key group =
       Dict.get key (getGroupCurrentData group)
       |> Maybe.map (always group)
       |> Maybe.withDefault { group | dataDelta = Dict.insert key (subNew, GroupAddD) group.dataDelta }
+
+
+{-| This is for directly setting a sub item's current value in the group. This should be used in
+processing of derived groups that are not associated with a running controller from a GroupConfig.
+-}
+groupSetSub : String -> subtype -> Group subtype -> Group subtype
+groupSetSub key subItem group =
+  case Dict.get key group.dataDelta of
+    Just (data', GroupRmD) -> { group | dataDelta = Dict.insert key (subItem, GroupSubD) group.dataDelta }
+    Just (data', GroupSubD) -> { group | dataDelta = Dict.insert key (subItem, GroupSubD) group.dataDelta }
+    Just (data', GroupAddD) -> { group | dataDelta = Dict.insert key (subItem, GroupAddD) group.dataDelta }
+
+    Nothing ->
+      Dict.get key (getGroupCurrentData group)
+      |> Maybe.map (\_ -> { group | dataDelta = Dict.insert key (subItem, GroupSubD) group.dataDelta })
+      |> Maybe.withDefault { group | dataDelta = Dict.insert key (subItem, GroupAddD) group.dataDelta }
+
 
 
 {-| Remove a sub item from the group. Note that this should very, very rarely ever be called manually
@@ -1094,6 +1166,44 @@ commitGroup cancelSub subscribeSub group =
   -- parallelize subscription and cancellation of sub-items
   |> \(group'', tasks'') -> (group'', App.finalizeTasks App.parallel tasks'')
 
+
+-- FLATTENING
+
+
+{-| Flatten a nested group `Group (Group subtype)` to a group `Group subtype` using a path
+reduction. For example if pathMerge were
+
+    \outer inner -> outer ++ "/" ++ inner
+
+then the resulting keys would be path fragments such as `foo/bar` where `foo` is the key of the
+outer group and `bar` is the key of the inner group.
+
+-}
+flatten : (String -> String -> String) -> Group (Group subtype) -> Group subtype -> Group subtype
+flatten pathMerge deepGroup group =
+  groupResDeltaFoldL
+    (\key subPair group' ->
+      case subPair of
+        (Resource.Known _, Resource.Known subGroup) ->
+          groupResDeltaFoldL
+            (\key' subSubPair ->
+              case subSubPair of
+                (_, Resource.Known sub) -> groupSetSub (pathMerge key key') sub
+                (Resource.Known _, _) -> groupRemoveSub (pathMerge key key')
+                (_, _) -> identity
+            ) group' subGroup
+
+        (_, Resource.Known subGroup) ->
+          Dict.foldl (pathMerge key >> groupSetSub) group' (getGroupCurrentData subGroup)
+
+        (Resource.Known subGroup, _) ->
+          Dict.foldl
+            (\key' _ -> pathMerge key key'
+            |> groupRemoveSub)
+            group' (getGroupCurrentData subGroup)
+
+        (_, _) -> group'
+    ) group deepGroup
 
 
 -- INTEGRATION

@@ -202,101 +202,12 @@ attachFilterDelta =
   attachDelta__
 
 
-attachSynch__ : (String -> rectype -> Maybe doctype) -> DB.Group (DB.Data rectype) -> Mirror doctype -> Mirror doctype
-attachSynch__ maybeMirror group (MirrorState priorState as priorShell) =
-  let
-    mirrorResource key =
-      Resource.deriveKnown
-        (maybeMirror key >> Maybe.map Resource.def >> Maybe.withDefault Resource.void)
-
-
-    toDoc key dat whc = mirrorResource key (whc dat)
-    docPair key dat = toDoc key dat |> \f -> (f fst, f snd)
-
-    getRes (MirrorState q) key =
-      Dict.get key q.resultRefs_
-      |> Maybe.map Resource.def
-      |> Maybe.withDefault Resource.void
-
-
-    rewriteDeltaPriors =
-      priorState.resultRefs
-      |> Dict.map (\_ _ -> Resource.void)
-      |> Dict.union (Dict.map (always Resource.def) priorState.resultRefs_)
-
-
-    (MirrorState state as shell) =
-      Dict.foldl
-        (\key resource -> mirrorDelta__ key (resource, Resource.void))
-        priorShell
-        rewriteDeltaPriors
-
-  in
-    Dict.foldl
-      (\key {value} shell' ->
-        mirrorDelta__ key
-          ( getRes shell' key
-          , mirrorResource key value
-          ) shell'
-      ) shell (DB.getGroupCurrentData group)
-
-
-attachDelta__ : (String -> rectype -> Maybe doctype) -> DB.Group (DB.Data rectype) -> Mirror doctype -> Mirror doctype
-attachDelta__ maybeMirror group (MirrorState priorState as priorShell) =
-  let
-    mirrorResource key =
-      Resource.deriveKnown
-        (maybeMirror key >> Maybe.map Resource.def >> Maybe.withDefault Resource.void)
-
-    toDoc key dat whc = mirrorResource key (whc dat)
-    docPair key dat = toDoc key dat |> \f -> (f fst, f snd)
-
-    currentData key =
-      DB.getGroupSubData key group
-      |> mirrorResource key
-
-
-    priorRes key =
-      Dict.get key priorState.resultRefs
-      |> Maybe.map Resource.def
-      |> Maybe.withDefault (currentData key)
-
-
-    (MirrorState state as shell, refreshSet) =
-      DB.groupDataResDeltaFoldR
-        (\key dat (currentShell, refreshSet') ->
-          ( docPair key dat
-            |> flip (mirrorDelta__ key) currentShell
-          , Set.remove key refreshSet'
-          )
-        )
-        (priorShell, priorState.refresh)
-        group
-
-
-    -- execute manual refresh on elements whose mirror result will change given the current function
-    (MirrorState state' as shell') =
-      Set.foldl
-        (\key (MirrorState currentState as currentShell) -> currentData key
-        |> Resource.therefore (Resource.def >> (,) (priorRes key))
-        |> Resource.therefore (flip (mirrorDelta__ key) currentShell)
-        |> Resource.otherwise currentShell)
-        shell
-        refreshSet
-
-  in
-    if Set.isEmpty state'.refresh then
-      shell'
-    else
-      MirrorState { state' | refresh = Set.empty }
-
-
 {-| Forward deltas from one mirror to another. -}
 forward : (String -> doctype -> doctype') -> Mirror doctype -> Mirror doctype' -> Mirror doctype'
 forward mirror (MirrorState sourceState as sourceShell) (MirrorState priorState as priorShell) =
   let
-    toDoc key dat whc = Resource.therefore (mirror key) (whc dat)
-    docPair key dat = toDoc key dat |> \f -> (f fst, f snd)
+    toDoc key = Resource.therefore (mirror key)
+    docPair key (prior, current) = (toDoc key prior, toDoc key current)
 
   in
     Dict.foldr
@@ -363,6 +274,108 @@ groupMirrorSynch newSub cancelSub (MirrorState sourceState as sourceShell) confi
 dataGroupMirrorSynch : Mirror doctype -> DB.GroupConfig (DB.Feedback v) (DB.Binding v) -> DB.Group (DB.Data v) -> (DB.Group (DB.Data v), List (DB.DBTask never))
 dataGroupMirrorSynch =
   groupMirrorSynch DB.newData DB.cancel
+
+
+
+attachSynch__ : (String -> rectype -> Maybe doctype) -> DB.Group (DB.Data rectype) -> Mirror doctype -> Mirror doctype
+attachSynch__ =
+  attachSynchAny__ .value
+
+
+attachDelta__ : (String -> rectype -> Maybe doctype) -> DB.Group (DB.Data rectype) -> Mirror doctype -> Mirror doctype
+attachDelta__ =
+  attachDeltaAny__ .value
+
+
+attachSynchAny__ : (subtype -> Resource DB.DBError rectype) -> (String -> rectype -> Maybe doctype) -> DB.Group subtype -> Mirror doctype -> Mirror doctype
+attachSynchAny__ fderive maybeMirror group (MirrorState priorState as priorShell) =
+  let
+    mirrorResource key =
+      Resource.deriveKnown
+        (maybeMirror key >> Maybe.map Resource.def >> Maybe.withDefault Resource.void)
+
+    docPair key (prior, current) =
+      (mirrorResource key prior, mirrorResource key current)
+
+    getRes (MirrorState q) key =
+      Dict.get key q.resultRefs_
+      |> Maybe.map Resource.def
+      |> Maybe.withDefault Resource.void
+
+
+    rewriteDeltaPriors =
+      priorState.resultRefs
+      |> Dict.map (\_ _ -> Resource.void)
+      |> Dict.union (Dict.map (always Resource.def) priorState.resultRefs_)
+
+
+    (MirrorState state as shell) =
+      Dict.foldl
+        (\key resource -> mirrorDelta__ key (resource, Resource.void))
+        priorShell
+        rewriteDeltaPriors
+
+  in
+    Dict.foldl
+      (\key sub shell' ->
+        mirrorDelta__ key
+          ( getRes shell' key
+          , mirrorResource key (fderive sub)
+          ) shell'
+      ) shell (DB.getGroupCurrentData group)
+
+
+attachDeltaAny__ : (subtype -> Resource DB.DBError rectype) -> (String -> rectype -> Maybe doctype) -> DB.Group subtype -> Mirror doctype -> Mirror doctype
+attachDeltaAny__ fderive maybeMirror group (MirrorState priorState as priorShell) =
+  let
+    mirrorResource key =
+      Resource.deriveKnown
+        (maybeMirror key >> Maybe.map Resource.def >> Maybe.withDefault Resource.void)
+
+    docPair key (prior, current) =
+      (mirrorResource key prior, mirrorResource key current)
+
+    currentData key =
+      DB.getGroupSub key group
+      |> Maybe.map fderive
+      |> Maybe.withDefault Resource.void
+      |> mirrorResource key
+
+
+    priorRes key =
+      Dict.get key priorState.resultRefs
+      |> Maybe.map Resource.def
+      |> Maybe.withDefault (currentData key)
+
+
+    (MirrorState state as shell, refreshSet) =
+      DB.groupDeriveDeltaFoldR
+        fderive
+        (\key dat (currentShell, refreshSet') ->
+          ( docPair key dat
+            |> flip (mirrorDelta__ key) currentShell
+          , Set.remove key refreshSet'
+          )
+        )
+        (priorShell, priorState.refresh)
+        group
+
+
+    -- execute manual refresh on elements whose mirror result will change given the current function
+    (MirrorState state' as shell') =
+      Set.foldl
+        (\key (MirrorState currentState as currentShell) -> currentData key
+        |> Resource.therefore (Resource.def >> (,) (priorRes key))
+        |> Resource.therefore (flip (mirrorDelta__ key) currentShell)
+        |> Resource.otherwise currentShell)
+        shell
+        refreshSet
+
+  in
+    if Set.isEmpty state'.refresh then
+      shell'
+    else
+      MirrorState { state' | refresh = Set.empty }
 
 
 updateMirrorDeltas__ : String -> (Resource DB.DBError doctype, Resource DB.DBError doctype) -> Mirror doctype -> Mirror doctype
