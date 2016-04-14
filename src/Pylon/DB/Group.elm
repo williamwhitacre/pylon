@@ -57,6 +57,7 @@ module Pylon.DB.Group
 
   , groupConfigLocation
   , groupConfigDefaultLocation
+  , groupConfigMaybeLocation
   , groupConfigPathLocation
   , groupConfigInputKey
   , groupConfigPopKey
@@ -149,7 +150,7 @@ or even a compatible API fitting the same pattern such that this system is easil
 @docs GroupFeedback2, GroupFeedback3, GroupFeedback4, GroupConfig2, GroupConfig3, GroupConfig4, Group2, Group3, Group4
 
 # Configuration
-@docs groupConfigBinding, groupConfig, groupConfigForward, groupConfigSelf, groupConfigSelfForward, groupConfigRebind, groupConfigRebindSelf, groupConfigGetAddress, groupConfigGetSubAddress, groupConfigLocation, groupConfigDefaultLocation, groupConfigPathLocation, groupConfigInputKey, groupConfigPopKey, groupConfigTopKey, groupConfigGetPath, groupConfigSetPath, groupConfigNoLocation, groupConfigParentLocation, groupConfigSubLocation, groupConfigRootLocation, groupConfigHasLocation, groupConfigGetLocation, groupConfigLocationOr
+@docs groupConfigBinding, groupConfig, groupConfigForward, groupConfigSelf, groupConfigSelfForward, groupConfigRebind, groupConfigRebindSelf, groupConfigGetAddress, groupConfigGetSubAddress, groupConfigLocation, groupConfigDefaultLocation, groupConfigMaybeLocation, groupConfigPathLocation, groupConfigInputKey, groupConfigPopKey, groupConfigTopKey, groupConfigGetPath, groupConfigSetPath, groupConfigNoLocation, groupConfigParentLocation, groupConfigSubLocation, groupConfigRootLocation, groupConfigHasLocation, groupConfigGetLocation, groupConfigLocationOr
 
 # Inspect Subfeedback
 @docs getGroupSubFeedbackKey, extractGroupSubFeedbackKeys, getGroupSubFeedback, getGroupSubFeedbackPair, extractGroupSubFeedbackPairs
@@ -424,6 +425,13 @@ groupConfigLocation location (GroupConfig config as shell) =
     { config
     | location = Just location
     }
+
+
+{-| Set a location if it exists. -}
+groupConfigMaybeLocation : Maybe ElmFire.Location -> GroupConfig subfeedback subbinding -> GroupConfig subfeedback subbinding
+groupConfigMaybeLocation location shell =
+  Maybe.map (\loc -> groupConfigLocation loc shell) location
+  |> Maybe.withDefault shell
 
 
 {-| Set a location for this group configuration by location and path. The root location will be
