@@ -76,6 +76,8 @@ module Pylon.DB.Group
 
   , getGroupCurrentData
   , getGroupDeltaData
+  , getGroupNextData
+
   , getGroupResDeltas
   , getGroupResDeltaList
   , getGroupDataResDeltas
@@ -150,7 +152,7 @@ or even a compatible API fitting the same pattern such that this system is easil
 @docs getGroupSubFeedbackKey, extractGroupSubFeedbackKeys, getGroupSubFeedback, getGroupSubFeedbackPair, extractGroupSubFeedbackPairs
 
 # Direct Group Inquiry
-@docs getGroupCurrentData, getGroupDeltaData, getGroupResDeltas, getGroupResDeltaList, getGroupDataResDeltas, getGroupDataResDeltaList, groupResDeltaFoldL, groupResDeltaFoldR, groupDataResDeltaFoldL, groupDataResDeltaFoldR, groupDeriveDeltaFoldL, groupDeriveDeltaFoldR, groupDeriveSub, getGroupSub, getGroupSubData
+@docs getGroupCurrentData, getGroupDeltaData, getGroupNextData, getGroupResDeltas, getGroupResDeltaList, getGroupDataResDeltas, getGroupDataResDeltaList, groupResDeltaFoldL, groupResDeltaFoldR, groupDataResDeltaFoldL, groupDataResDeltaFoldR, groupDeriveDeltaFoldL, groupDeriveDeltaFoldR, groupDeriveSub, getGroupSub, getGroupSubData
 
 
 # Direct Group Manipulation
@@ -607,6 +609,19 @@ getGroupDeltaData : Group subtype -> Dict String (Maybe subtype)
 getGroupDeltaData =
   .dataDelta
   >> Dict.map (\_ (data', deltaTag) -> if deltaTag == GroupRmD then Nothing else Just data')
+
+
+{-| Get what the group's data will be after the deltas are applied. Note that this result does not
+account for cancellation and integration actions that will be applied by groupIntegrate. -}
+getGroupNextData : Group subtype -> Dict String subtype
+getGroupNextData group =
+  Dict.foldl
+    (\key (data', deltaTag) ->
+      if deltaTag == GroupRmD then
+        Dict.remove key
+      else
+        Dict.insert key data'
+    ) (getGroupCurrentData group) group.dataDelta
 
 
 {-| Get the current change in the group's data as a dictionary of resource pairs, each representing
@@ -1194,13 +1209,13 @@ flatten pathMerge deepGroup group =
             ) group' subGroup
 
         (_, Resource.Known subGroup) ->
-          Dict.foldl (pathMerge key >> groupSetSub) group' (getGroupCurrentData subGroup)
+          Dict.foldl (pathMerge key >> groupSetSub) group' (getGroupNextData subGroup)
 
         (Resource.Known subGroup, _) ->
           Dict.foldl
             (\key' _ -> pathMerge key key'
             |> groupRemoveSub)
-            group' (getGroupCurrentData subGroup)
+            group' (getGroupNextData subGroup)
 
         (_, _) -> group'
     ) group deepGroup

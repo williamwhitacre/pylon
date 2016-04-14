@@ -322,7 +322,7 @@ attachSynchAny__ fderive maybeMirror group (MirrorState priorState as priorShell
           ( getRes shell' key
           , mirrorResource key (fderive sub)
           ) shell'
-      ) shell (DB.getGroupCurrentData group)
+      ) shell (DB.getGroupNextData group)
 
 
 attachDeltaAny__ : (subtype -> Resource DB.DBError rectype) -> (String -> rectype -> Maybe doctype) -> DB.Group subtype -> Mirror doctype -> Mirror doctype
