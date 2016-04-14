@@ -49,6 +49,9 @@ module Pylon.DB.Group
   , groupConfigSelf
   , groupConfigSelfForward
 
+  , groupConfigRebind
+  , groupConfigRebindSelf
+
   , groupConfigGetAddress
   , groupConfigGetSubAddress
 
@@ -146,7 +149,7 @@ or even a compatible API fitting the same pattern such that this system is easil
 @docs GroupFeedback2, GroupFeedback3, GroupFeedback4, GroupConfig2, GroupConfig3, GroupConfig4, Group2, Group3, Group4
 
 # Configuration
-@docs groupConfigBinding, groupConfig, groupConfigForward, groupConfigSelf, groupConfigSelfForward, groupConfigGetAddress, groupConfigGetSubAddress, groupConfigLocation, groupConfigDefaultLocation, groupConfigPathLocation, groupConfigInputKey, groupConfigPopKey, groupConfigTopKey, groupConfigGetPath, groupConfigSetPath, groupConfigNoLocation, groupConfigParentLocation, groupConfigSubLocation, groupConfigRootLocation, groupConfigHasLocation, groupConfigGetLocation, groupConfigLocationOr
+@docs groupConfigBinding, groupConfig, groupConfigForward, groupConfigSelf, groupConfigSelfForward, groupConfigRebind, groupConfigRebindSelf, groupConfigGetAddress, groupConfigGetSubAddress, groupConfigLocation, groupConfigDefaultLocation, groupConfigPathLocation, groupConfigInputKey, groupConfigPopKey, groupConfigTopKey, groupConfigGetPath, groupConfigSetPath, groupConfigNoLocation, groupConfigParentLocation, groupConfigSubLocation, groupConfigRootLocation, groupConfigHasLocation, groupConfigGetLocation, groupConfigLocationOr
 
 # Inspect Subfeedback
 @docs getGroupSubFeedbackKey, extractGroupSubFeedbackKeys, getGroupSubFeedback, getGroupSubFeedbackPair, extractGroupSubFeedbackPairs
@@ -392,6 +395,24 @@ groupConfigSelfForward
   -> GroupConfig subfeedback subbinding
 groupConfigSelfForward factions address =
   groupConfigSelf (Signal.forwardTo address factions)
+
+
+{-| Rebind a group config to behave altogether differently. This is useful when propagating subbindings using the `*Self*` family. -}
+groupConfigRebindSelf : (GroupConfig subfeedback subbinding' -> String -> subbinding') -> GroupConfig subfeedback subbinding -> GroupConfig subfeedback subbinding'
+groupConfigRebindSelf fbinding (GroupConfig config) =
+  GroupConfig { config | binding = fbinding }
+
+
+{-| Rebind a group config to behave altogether differently. This is useful when propagating subbindings using the `*Self*` family. -}
+groupConfigRebind : (Signal.Address (List subfeedback) -> Maybe ElmFire.Location -> String -> subbinding') -> GroupConfig subfeedback subbinding -> GroupConfig subfeedback subbinding'
+groupConfigRebind fbinding (GroupConfig config) =
+  GroupConfig
+    { config
+    | binding = (\self key -> fbinding
+        (groupConfigGetSubAddress key self)
+        (groupConfigGetLocation self) key)
+    }
+
 
 
 {-| Set a location for this group configuration. Note that since the Location type is opaque to
