@@ -30,16 +30,31 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 module Pylon.DB.Group
   ( GroupFeedback(..)
+  , GroupFeedback2
+  , GroupFeedback3
+  , GroupFeedback4
   , GroupConfig
+  , GroupConfig2
+  , GroupConfig3
+  , GroupConfig4
   , Group
+  , Group2
+  , Group3
+  , Group4
+
+  , groupConfigBinding
 
   , groupConfig
   , groupConfigForward
-  , groupConfigBinding
+  , groupConfigSelf
+  , groupConfigSelfForward
+
   , groupConfigGetAddress
+  , groupConfigGetSubAddress
 
   , groupConfigLocation
   , groupConfigDefaultLocation
+  , groupConfigPathLocation
   , groupConfigInputKey
   , groupConfigPopKey
   , groupConfigTopKey
@@ -83,14 +98,29 @@ module Pylon.DB.Group
   , groupInput
   , groupDataInputOne
   , groupDataInput
+  , groupInputOne2
+  , groupInput2
+  , groupInputOne3
+  , groupInput3
+  , groupInputOne4
+  , groupInput4
 
   , resetGroup
   , cancelGroup
   , cancelDataGroup
   , cancelAndResetGroup
+  , cancelGroup2
+  , cancelGroup3
+  , cancelGroup4
   , cancelAndResetDataGroup
+  , cancelAndResetGroup2
+  , cancelAndResetGroup3
+  , cancelAndResetGroup4
 
   , groupIntegrate
+  , groupIntegrate2
+  , groupIntegrate3
+  , groupIntegrate4
   , groupDataIntegrate
   , groupSubscription
   ) where
@@ -98,17 +128,21 @@ module Pylon.DB.Group
 {-| Nested data. The typing is done such that one can arbitrarily nest groups, trivial data records,
 or even a compatible API fitting the same pattern such that this system is easily extensible.
 
-# Types
+# Core Types
 @docs GroupFeedback, GroupConfig, Group
 
+# Nesting Convenience Types
+@docs GroupFeedback2, GroupFeedback3, GroupFeedback4, GroupConfig2, GroupConfig3, GroupConfig4, Group2, Group3, Group4
+
 # Configuration
-@docs groupConfig, groupConfigForward, groupConfigBinding, groupConfigGetAddress, groupConfigLocation, groupConfigDefaultLocation, groupConfigInputKey, groupConfigPopKey, groupConfigTopKey, groupConfigGetPath, groupConfigSetPath, groupConfigNoLocation, groupConfigParentLocation, groupConfigSubLocation, groupConfigRootLocation, groupConfigHasLocation, groupConfigGetLocation, groupConfigLocationOr
+@docs groupConfigBinding, groupConfig, groupConfigForward, groupConfigSelf, groupConfigSelfForward, groupConfigGetAddress, groupConfigGetSubAddress, groupConfigLocation, groupConfigDefaultLocation, groupConfigPathLocation, groupConfigInputKey, groupConfigPopKey, groupConfigTopKey, groupConfigGetPath, groupConfigSetPath, groupConfigNoLocation, groupConfigParentLocation, groupConfigSubLocation, groupConfigRootLocation, groupConfigHasLocation, groupConfigGetLocation, groupConfigLocationOr
 
 # Inspect Subfeedback
 @docs getGroupSubFeedbackKey, extractGroupSubFeedbackKeys, getGroupSubFeedback, getGroupSubFeedbackPair, extractGroupSubFeedbackPairs
 
 # Direct Group Inquiry
 @docs getGroupCurrentData, getGroupDeltaData, getGroupDataResDeltas, getGroupDataResDeltaList, groupDataResDeltaFoldL, groupDataResDeltaFoldR, groupDeriveSub, getGroupSub, getGroupSubData
+
 
 # Direct Group Manipulation
 
@@ -123,10 +157,35 @@ invoke the operations provided by `Pylon.DB`.
 @docs newGroup, voidGroup
 
 # Raw Group Operations
-@docs groupInputOne, groupInput, cancelGroup, resetGroup, cancelAndResetGroup, groupIntegrate, groupSubscription
+
+These expose the raw group interface, and all it's power. Nesting them is painstaking, though
+very robust, so one might wish to use the `groupNested*` family of operations for nested groups up
+up to four levels deep. For the possibility of arbitrary depth tries, please wait for Pylon 8. The
+group resource tag from `Scaffold` (old version) proved to function exactly like this, with a
+working public example. The tradeoff would of course be a weaker type flexibility in exchange for
+much stronger structural flexibility. Expect `DynamicGroup` as part of Pylon 8. Pylon 7 will be
+thoroughly documented and examples made before we get around to this.
+
+@docs groupInputOne, groupInput, cancelGroup, resetGroup, cancelAndResetGroup, groupIntegrate
 
 # Data Group Operations
 @docs groupDataInputOne, groupDataInput, cancelDataGroup, cancelAndResetDataGroup, groupDataIntegrate
+
+# Nested Group Operations
+
+Sometimes a plain group of data is not deep enough. This family of functions operates on nested
+group records up to four levels deep, which should be good enough for most ordinary use cases. In
+the case that you want (a) to account for a variable depth trie or (b) more levels in general,
+please wait for the release of DynamicGroup with Pylon 8.
+
+@docs groupInputOne2, groupInput2, cancelGroup2, cancelAndResetGroup2, groupIntegrate2, groupInputOne3, groupInput3, cancelGroup3, cancelAndResetGroup3, groupIntegrate3, groupInputOne4, groupInput4, cancelGroup4, cancelAndResetGroup4, groupIntegrate4
+
+# Builtin Group Controllers
+
+See also the `Pylon.DB.Mirror` module for a controller that manages subscriptions of sub data or
+sub groups by synchronizing to a mirror.
+
+@docs groupSubscription
 
 -}
 
@@ -148,10 +207,17 @@ import Set exposing (Set)
 type GroupDelta = GroupAddD | GroupRmD | GroupSubD
 
 
-type alias GroupFeedbackReserved_ = ()
+type GroupFeedbackReserved_ =
+  GFeedbackReserved_
+    { reserved : ()
+    }
 
 
-{-| DB.Feedback for nested group subscriptions. -}
+groupFeedbackReservedNew : GroupFeedbackReserved_
+groupFeedbackReservedNew = GFeedbackReserved_ { reserved = () }
+
+
+{-| Feedback for nested group subscriptions. -}
 type GroupFeedback subfeedback =
   GroupSubscribedAdd ElmFire.Subscription
   | GroupSubscribedRemove ElmFire.Subscription
@@ -170,6 +236,19 @@ type GroupFeedback subfeedback =
   | GroupReserved GroupFeedbackReserved_
 
 
+{-| Nested group feedback, depth 2. -}
+type alias GroupFeedback2 subfeedback =
+  GroupFeedback (GroupFeedback subfeedback)
+
+{-| Nested group feedback, depth 3. -}
+type alias GroupFeedback3 subfeedback =
+  GroupFeedback (GroupFeedback2 subfeedback)
+
+{-| Nested group feedback, depth 4. -}
+type alias GroupFeedback4 subfeedback =
+  GroupFeedback (GroupFeedback3 subfeedback)
+
+
 type alias GroupConfigData =
   { inputKeys_ : List String
   }
@@ -185,7 +264,20 @@ type GroupConfig subfeedback subbinding =
     }
 
 
-{-| Nested group record. -}
+{-| Nested group configuration, depth 2. -}
+type alias GroupConfig2 subfeedback subbinding =
+  GroupConfig (GroupFeedback subfeedback) (GroupConfig subfeedback subbinding)
+
+{-| Nested group configuration, depth 3. -}
+type alias GroupConfig3 subfeedback subbinding =
+  GroupConfig (GroupFeedback2 subfeedback) (GroupConfig2 subfeedback subbinding)
+
+{-| Nested group configuration, depth 4. -}
+type alias GroupConfig4 subfeedback subbinding =
+  GroupConfig (GroupFeedback3 subfeedback) (GroupConfig3 subfeedback subbinding)
+
+
+{-| Nestable group record. -}
 type alias Group subtype =
   { dataDelta : Dict String (subtype, GroupDelta)
   , data : Resource DB.DBError (Dict String subtype)
@@ -197,7 +289,22 @@ type alias Group subtype =
   }
 
 
-{-| TODO: write docs -}
+{-| Nested group record, depth 2. -}
+type alias Group2 subtype =
+  Group (Group (subtype))
+
+{-| Nested group record, depth 3. -}
+type alias Group3 subtype =
+  Group (Group2 (subtype))
+
+{-| Nested group record, depth 4. -}
+type alias Group4 subtype =
+  Group (Group3 (subtype))
+
+
+{-| Interpret the current state of a `GroupConfig` by producing an immediate binding function that
+passes the current state of GroupConfig as it's self parameter. See `groupConfigSelf` and
+`groupConfigSelfForward` for a way to access the GroupConfig from within the binding function. -}
 groupConfigBinding : GroupConfig subfeedback subbinding -> String -> subbinding
 groupConfigBinding (GroupConfig config as shell) = config.binding shell
 
@@ -207,25 +314,41 @@ groupConfigGetAddress : GroupConfig subfeedback subbinding -> Signal.Address (Li
 groupConfigGetAddress (GroupConfig config as shell) = config.address
 
 
+computeSubAddress : String -> Signal.Address (List (GroupFeedback subfeedback)) -> Signal.Address (List subfeedback)
+computeSubAddress key =
+  flip Signal.forwardTo (List.map <| GroupSub key)
+
+
+{-| Get the subaddress that will be used for a given key. -}
+groupConfigGetSubAddress : String -> GroupConfig subfeedback subbinding -> Signal.Address (List subfeedback)
+groupConfigGetSubAddress key =
+  groupConfigGetAddress >> computeSubAddress key
+
+
 {-| Construct a new group configuration. -}
 groupConfig
   :  Signal.Address (List (GroupFeedback subfeedback))
   -> (Signal.Address (List subfeedback) -> Maybe ElmFire.Location -> String -> subbinding)
   -> GroupConfig subfeedback subbinding
 groupConfig address fbinding =
+  (\self key -> fbinding
+      (groupConfigGetSubAddress key self)
+      (groupConfigGetLocation self) key)
+  |> groupConfigSelf address
+
+
+{-| Construct a new self aware group configuration. -}
+groupConfigSelf
+  :  Signal.Address (List (GroupFeedback subfeedback))
+  -> (GroupConfig subfeedback subbinding -> String -> subbinding)
+  -> GroupConfig subfeedback subbinding
+groupConfigSelf address fbinding =
   GroupConfig
     { address = address
     , location = Nothing
-    , binding =
-        (\(GroupConfig self) key -> fbinding
-          (List.map (GroupSub key)
-          |> Signal.forwardTo self.address)
-
-          self.location
-          key)
+    , binding = fbinding
     , data_ = { inputKeys_ = [] }
     }
-
 
 {-| Construct a new group configuration with an action forwarding function. -}
 groupConfigForward
@@ -237,13 +360,37 @@ groupConfigForward factions address =
   groupConfig (Signal.forwardTo address factions)
 
 
-{-| TODO: write docs -}
+{-| Construct a new self aware group configuration with an action forwarding function. -}
+groupConfigSelfForward
+  :  (List (GroupFeedback subfeedback) -> List action)
+  -> Signal.Address (List action)
+  -> (GroupConfig subfeedback subbinding -> String -> subbinding)
+  -> GroupConfig subfeedback subbinding
+groupConfigSelfForward factions address =
+  groupConfigSelf (Signal.forwardTo address factions)
+
+
+{-| Set a location for this group configuration. Note that since the Location type is opaque to
+Pylon and is "generally not validated" (via the ElmFire docs), it is not possible for us to ensure
+that the current location always matches up with the current path. Please take care. -}
 groupConfigLocation : ElmFire.Location -> GroupConfig subfeedback subbinding -> GroupConfig subfeedback subbinding
 groupConfigLocation location (GroupConfig config as shell) =
   GroupConfig
     { config
     | location = Just location
     }
+
+
+{-| Set a location for this group configuration by location and path. The root location will be
+derived from the given location (you should give the root location anyway for clarity's sake) and
+then groupConfigSubLocation will be applied to each path element starting from the left, resulting
+in a properly rooted full path. This can be manipulated using groupConfigParentLocation with
+valid results. -}
+groupConfigPathLocation : List String -> ElmFire.Location -> GroupConfig subfeedback subbinding -> GroupConfig subfeedback subbinding
+groupConfigPathLocation path location =
+  groupConfigLocation location
+  >> groupConfigRootLocation
+  >> flip (List.foldl groupConfigSubLocation) path
 
 
 {-| TODO: write docs -}
@@ -728,11 +875,26 @@ groupDataInputOne =
   groupInputOne DB.newData DB.inputOne
 
 
-{-| Convenient way of declaring a nested group input function. -}
-groupNestedInputOne : subtype -> (subfeedback -> subtype -> subtype) -> GroupFeedback (GroupFeedback subfeedback) -> Group (Group subtype) -> Group (Group subtype)
-groupNestedInputOne newSub inputSub =
+{-| groupInputOne for depth 2. -}
+groupInputOne2 : subtype -> (subfeedback -> subtype -> subtype) -> GroupFeedback2 subfeedback -> Group2 subtype -> Group2 subtype
+groupInputOne2 newSub inputSub =
   groupInputOne newSub inputSub
   |> groupInputOne newGroup
+
+
+{-| groupInputOne for depth 3. -}
+groupInputOne3 : subtype -> (subfeedback -> subtype -> subtype) -> GroupFeedback3 subfeedback -> Group3 subtype -> Group3 subtype
+groupInputOne3 newSub inputSub =
+  groupInputOne2 newSub inputSub
+  |> groupInputOne newGroup
+
+
+{-| groupInputOne for depth 4. -}
+groupInputOne4 : subtype -> (subfeedback -> subtype -> subtype) -> GroupFeedback4 subfeedback -> Group4 subtype -> Group4 subtype
+groupInputOne4 newSub inputSub =
+  groupInputOne3 newSub inputSub
+  |> groupInputOne newGroup
+
 
 {-| Group feedback update function accepting a list of `DB.Feedback`. -}
 groupInput : subtype -> (subfeedback -> subtype -> subtype) -> List (GroupFeedback subfeedback) -> Group subtype -> Group subtype
@@ -746,10 +908,24 @@ groupDataInput =
   groupInput DB.newData DB.inputOne
 
 
-{-| Convenient way of declaring a nested group input list function. -}
-groupNestedInput : subtype -> (subfeedback -> subtype -> subtype) -> List (GroupFeedback (GroupFeedback subfeedback)) -> Group (Group subtype) -> Group (Group subtype)
-groupNestedInput newSub inputSub =
+{-| groupInput for depth 2. -}
+groupInput2 : subtype -> (subfeedback -> subtype -> subtype) -> List (GroupFeedback2 subfeedback) -> Group2 subtype -> Group2 subtype
+groupInput2 newSub inputSub =
   groupInputOne newSub inputSub
+  |> groupInput newGroup
+
+
+{-| groupInput for depth 3. -}
+groupInput3 : subtype -> (subfeedback -> subtype -> subtype) -> List (GroupFeedback3 subfeedback) -> Group3 subtype -> Group3 subtype
+groupInput3 newSub inputSub =
+  groupInputOne2 newSub inputSub
+  |> groupInput newGroup
+
+
+{-| groupInput for depth 4. -}
+groupInput4 : subtype -> (subfeedback -> subtype -> subtype) -> List (GroupFeedback4 subfeedback) -> Group4 subtype -> Group4 subtype
+groupInput4 newSub inputSub =
+  groupInputOne3 newSub inputSub
   |> groupInput newGroup
 
 
@@ -807,10 +983,24 @@ cancelDataGroup : Group (DB.Data v) -> (Group (DB.Data v), List (DB.DBTask never
 cancelDataGroup =
   cancelGroup DB.cancel
 
-{-| Convenient way of declaring a nested cancellation function. -}
-cancelNestedGroup : (subtype -> (subtype, List (DB.DBTask never))) -> Group (Group subtype) -> (Group (Group subtype), List (DB.DBTask never))
-cancelNestedGroup cancelSub =
+{-| cancelGroup for depth 2. -}
+cancelGroup2 : (subtype -> (subtype, List (DB.DBTask never))) -> Group2 subtype -> (Group2 subtype, List (DB.DBTask never))
+cancelGroup2 cancelSub =
   cancelGroup cancelSub
+  |> cancelGroup
+
+
+{-| cancelGroup for depth 3. -}
+cancelGroup3 : (subtype -> (subtype, List (DB.DBTask never))) -> Group3 subtype -> (Group3 subtype, List (DB.DBTask never))
+cancelGroup3 cancelSub =
+  cancelGroup2 cancelSub
+  |> cancelGroup
+
+
+{-| cancelGroup for depth 4. -}
+cancelGroup4 : (subtype -> (subtype, List (DB.DBTask never))) -> Group4 subtype -> (Group4 subtype, List (DB.DBTask never))
+cancelGroup4 cancelSub =
+  cancelGroup3 cancelSub
   |> cancelGroup
 
 
@@ -848,11 +1038,38 @@ cancelAndResetDataGroup =
   cancelAndResetGroup DB.cancel
 
 
-cancelAndResetNestedGroup : (subtype -> (subtype, List (DB.DBTask never))) -> Group (Group subtype) -> (Group (Group subtype), List (DB.DBTask never))
-cancelAndResetNestedGroup cancelSub group =
-  cancelNestedGroup cancelSub group
-  |> \(group', tasks) -> resetGroup group'
-  |> flip (,) (App.finalizeTasks App.sequence tasks)
+{-| cancelAndResetGroup for depth 2. -}
+cancelAndResetGroup2 : (subtype -> (subtype, List (DB.DBTask never))) -> Group2 subtype -> (Group2 subtype, List (DB.DBTask never))
+cancelAndResetGroup2 cancelSub =
+  App.chain
+    [ App.chain
+        [ cancelGroup2 cancelSub
+        , App.asEffector resetGroup
+        ]
+        |> App.finalizedEffector App.sequence
+    ]
+
+{-| cancelAndResetGroup for depth 3. -}
+cancelAndResetGroup3 : (subtype -> (subtype, List (DB.DBTask never))) -> Group3 subtype -> (Group3 subtype, List (DB.DBTask never))
+cancelAndResetGroup3 cancelSub =
+  App.chain
+    [ App.chain
+        [ cancelGroup3 cancelSub
+        , App.asEffector resetGroup
+        ]
+        |> App.finalizedEffector App.sequence
+    ]
+
+{-| cancelAndResetGroup for depth 4. -}
+cancelAndResetGroup4 : (subtype -> (subtype, List (DB.DBTask never))) -> Group4 subtype -> (Group4 subtype, List (DB.DBTask never))
+cancelAndResetGroup4 cancelSub =
+  App.chain
+    [ App.chain
+        [ cancelGroup4 cancelSub
+        , App.asEffector resetGroup
+        ]
+        |> App.finalizedEffector App.sequence
+    ]
 
 
 
@@ -917,30 +1134,70 @@ groupIntegrate controllers cancelSub integrateSub config priorGroup =
     :: List.map ((|>) config) controllers)
     priorGroup
 
-
-groupNestedIntegrate
-  :  List (GroupConfig (GroupFeedback subfeedback) (GroupConfig subfeedback subbinding) -> Group (Group subtype) -> (Group (Group subtype), List (DB.DBTask never)))
+{-| groupIntegrate for depth 2. -}
+groupIntegrate2
+  :  List (GroupConfig2 subfeedback subbinding -> Group2 subtype -> (Group2 subtype, List (DB.DBTask never)))
   -> List (GroupConfig subfeedback subbinding -> Group subtype -> (Group subtype, List (DB.DBTask never)))
 
   -> (subtype -> (subtype, List (DB.DBTask never)))
   -> (subbinding -> subtype -> (subtype, List (DB.DBTask never)))
 
-  -> GroupConfig (GroupFeedback subfeedback) (GroupConfig subfeedback subbinding)
-  -> Group (Group subtype)
-  -> (Group (Group subtype), List (DB.DBTask never))
-groupNestedIntegrate controllers subCtrl subCancel subIntegrate =
+  -> GroupConfig2 subfeedback subbinding
+  -> Group2 subtype
+  -> (Group2 subtype, List (DB.DBTask never))
+groupIntegrate2 ctrl2 ctrl1 subCancel subIntegrate =
   groupIntegrate
-    controllers
+    ctrl2
     (cancelGroup subCancel)
-    (groupIntegrate subCtrl subCancel subIntegrate)
+    (groupIntegrate ctrl1 subCancel subIntegrate)
+
+{-| groupIntegrate for depth 3. -}
+groupIntegrate3
+  :  List (GroupConfig3 subfeedback subbinding -> Group3 subtype -> (Group3 subtype, List (DB.DBTask never)))
+  -> List (GroupConfig2 subfeedback subbinding -> Group2 subtype -> (Group2 subtype, List (DB.DBTask never)))
+  -> List (GroupConfig subfeedback subbinding -> Group subtype -> (Group subtype, List (DB.DBTask never)))
+
+  -> (subtype -> (subtype, List (DB.DBTask never)))
+  -> (subbinding -> subtype -> (subtype, List (DB.DBTask never)))
+
+  -> GroupConfig3 subfeedback subbinding
+  -> Group3 subtype
+  -> (Group3 subtype, List (DB.DBTask never))
+groupIntegrate3 ctrl3 ctrl2 ctrl1 subCancel subIntegrate =
+  groupIntegrate2
+    ctrl3
+    ctrl2
+    (cancelGroup subCancel)
+    (groupIntegrate ctrl1 subCancel subIntegrate)
+
+{-| groupIntegrate for depth 4. -}
+groupIntegrate4
+  :  List (GroupConfig4 subfeedback subbinding -> Group4 subtype -> (Group4 subtype, List (DB.DBTask never)))
+  -> List (GroupConfig3 subfeedback subbinding -> Group3 subtype -> (Group3 subtype, List (DB.DBTask never)))
+  -> List (GroupConfig2 subfeedback subbinding -> Group2 subtype -> (Group2 subtype, List (DB.DBTask never)))
+  -> List (GroupConfig subfeedback subbinding -> Group subtype -> (Group subtype, List (DB.DBTask never)))
+
+  -> (subtype -> (subtype, List (DB.DBTask never)))
+  -> (subbinding -> subtype -> (subtype, List (DB.DBTask never)))
+
+  -> GroupConfig4 subfeedback subbinding
+  -> Group4 subtype
+  -> (Group4 subtype, List (DB.DBTask never))
+groupIntegrate4 ctrl4 ctrl3 ctrl2 ctrl1 subCancel subIntegrate =
+  groupIntegrate3
+    ctrl4
+    ctrl3
+    ctrl2
+    (cancelGroup subCancel)
+    (groupIntegrate ctrl1 subCancel subIntegrate)
 
 
 {-
-groupNestedInputOne
-groupNestedInput
+groupInputOne
+groupInput
 
-cancelNestedGroup
-cancelAndResetNestedGroup
+cancelGroup
+cancelAndResetGroup
 
 groupNestedIntegrate
 -}
