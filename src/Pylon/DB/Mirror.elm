@@ -46,6 +46,7 @@ module Pylon.DB.Mirror
   , commit
 
   , bindMirror
+  , bindMirrorRaw
   , groupMirror
   , groupMirrorSynch
   , dataGroupMirror
@@ -70,7 +71,7 @@ module Pylon.DB.Mirror
 @docs inject, commit
 
 # Group Binding
-@docs bindMirror, groupMirror, groupMirror, groupMirrorSynch, dataGroupMirror, dataGroupMirrorSynch
+@docs bindMirror, bindMirrorRaw, groupMirror, groupMirror, groupMirrorSynch, dataGroupMirror, dataGroupMirrorSynch
 
 -}
 
@@ -227,6 +228,19 @@ bindMirror
 bindMirror route (MirrorState sourceState as sourceShell) address location key =
   case Dict.get key sourceState.resultRefs_ of
     Just ref -> route address location key ref
+    Nothing -> Debug.crash ("Since the source document at " ++ key ++ " does not exist, bindMirror should never have been reached with this key.")
+
+
+{-|  -}
+bindMirrorRaw
+  :  (DB.GroupConfig subfeedback subbinding -> String -> doctype -> subbinding)
+  -> Mirror doctype
+  -> DB.GroupConfig subfeedback subbinding
+  -> String
+  -> subbinding
+bindMirrorRaw route (MirrorState sourceState as sourceShell) config key =
+  case Dict.get key sourceState.resultRefs_ of
+    Just ref -> route config key ref
     Nothing -> Debug.crash ("Since the source document at " ++ key ++ " does not exist, bindMirror should never have been reached with this key.")
 
 
