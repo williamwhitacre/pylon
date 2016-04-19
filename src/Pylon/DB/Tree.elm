@@ -679,6 +679,7 @@ nodeSubscribe' targetPathInput context config path mnode =
             [ nodeCancel context config path
             , App.chainSub nodeMetaGet nodeMetaSet
                 [ App.asEffector (\m -> { m | targetPath = targetPath', switchController = True })
+                , App.doEffect (\m -> [Signal.send context.address [ReservedFeedback path ()]])
                 ]
             ] mnode
         else if not switchController then
@@ -698,6 +699,7 @@ nodeSubscribe' targetPathInput context config path mnode =
             [ nodeCancelAndReset context config path
             , App.chainSub nodeMetaGet nodeMetaSet
                 [ App.asEffector (\m -> { m | targetPath = targetPath', switchController = True })
+                , App.doEffect (\m -> [Signal.send context.address [ReservedFeedback path ()]])
                 ]
             ] mnode
         else if not switchController then
