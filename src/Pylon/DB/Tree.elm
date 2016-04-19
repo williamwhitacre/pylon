@@ -648,7 +648,6 @@ nodeSubscribe' : Path -> Context subfeedback -> Config never subtype subfeedback
 nodeSubscribe' targetPathInput context config path mnode =
   let
     (targetPath', isData, isManual, orderOptions) =
-      Debug.log "SUBSCRIBE NODE" <|
       case config.policy path of
         Data                                     -> (targetPathInput,  True,  False, ElmFire.noOrder)
         Manual                                   -> (targetPathInput,  False, True,  ElmFire.noOrder)
@@ -701,17 +700,18 @@ nodeSubscribe' targetPathInput context config path mnode =
                 [ App.asEffector (\m -> { m | targetPath = targetPath', switchController = True })
                 ]
             ] mnode
-        else if not (Path.isSame targetPath targetPath') then
-          App.chain
-            [ nodeCancelAndReset context config path
-            , App.chainSub nodeMetaGet nodeMetaSet
-                [ App.asEffector (\m -> { m | targetPath = targetPath' })
-                ]
-            ] mnode
         else if not switchController then
           let
             { subscribeAdd, subscribeRemove } =
               subscribers_ context orderOptions targetLocation' path
+
+            (mnode', tasks') =
+              App.chainIf (always <| not (Path.isSame targetPath targetPath'))
+                [ nodeCancelAndReset context config path
+                , App.chainSub nodeMetaGet nodeMetaSet
+                    [ App.asEffector (\m -> { m | targetPath = targetPath' })
+                    ]
+                ] mnode
 
             ({ childrenStruct', meta' }, tasks) =
               App.chain
@@ -765,9 +765,9 @@ nodeSubscribe' targetPathInput context config path mnode =
                         ]
                     ]
                     |> App.finalizedEffector App.parallel
-                ] { meta' = meta, childrenStruct' = childrenStruct }
+                ] { meta' = nodeMetaGet mnode', childrenStruct' = nodeChildrenGet mnode' |> Maybe.withDefault childrenEmpty }
           in
-            (Node meta' childrenStruct', tasks)
+            (Node meta' childrenStruct', tasks' ++ tasks)
       else
         (mnode, [])
 
