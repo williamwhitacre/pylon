@@ -52,6 +52,7 @@ module Pylon.App
   , chainWhile
   , chainSub
   , chainSubIf
+  , chainSubMaybe
   , chainFinalizingEach
   , finalizedEffector
   , asEffector
@@ -131,7 +132,7 @@ possibly producing a number of tasks to execute. Such task lists can be either e
 by the user using `finalizeTasks`, or they can be converted to `ActionTask`s and returned to the
 top level, where the configured `Dispatch` method is used to run the tasks.
 
-@docs chain, chainIf, chainWhile, chainSub, chainSubIf, chainFinalizingEach, asEffector, mappedEffector, noEffect, doEffect, finalizedEffector
+@docs chain, chainIf, chainWhile, chainSub, chainSubIf, chainSubMaybe, chainFinalizingEach, asEffector, mappedEffector, noEffect, doEffect, finalizedEffector
 
 
 # Task Manipulation
@@ -312,8 +313,23 @@ chainSub
   -> modeltype
   -> (modeltype, List (Task z r))
 chainSub fget fupdate functions data =
-  chain functions (fget data)
+  fget data
+  |> chain functions
   |> \(sub', tasks') -> (fupdate sub' data, tasks')
+
+
+{-| Execute the list of effectors on the Maybe sub model only if it is not Nothing. -}
+chainSubMaybe
+  :  (modeltype -> Maybe innertype)
+  -> (Maybe innertype -> modeltype -> modeltype)
+  -> List (innertype -> (innertype, List (Task z r)))
+  -> modeltype
+  -> (modeltype, List (Task z r))
+chainSubMaybe fget fupdate functions data =
+  fget data
+  |> Maybe.map (chain functions)
+  |> Maybe.map (\(sub', tasks') -> (fupdate (Just sub') data, tasks'))
+  |> Maybe.withDefault (fupdate Nothing data, [])
 
 
 {-| Conditionally chain some effectors on an inner model. -}

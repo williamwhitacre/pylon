@@ -105,6 +105,7 @@ backends is planned, but not promised.
 
 import Pylon.App as App
 import Pylon.Resource as Resource exposing (Resource)
+import Pylon.DB.Path as Path exposing (Path)
 
 import ElmFire
 
@@ -127,6 +128,9 @@ type DBError =
   | OperationErrorTag ElmFire.Error
   | SubscriptionErrorTag ElmFire.Error
   | DecodingErrorTag String
+  | WriteLocationParentIsData
+  | RecievedSubFeedbackForGroup
+  | RemovalPathDoesNotExist Path
 
 
 {-| Feedback from the database. -}
