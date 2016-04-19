@@ -648,6 +648,7 @@ nodeSubscribe' : Path -> Context subfeedback -> Config never subtype subfeedback
 nodeSubscribe' targetPathInput context config path mnode =
   let
     (targetPath', isData, isManual, orderOptions) =
+      Debug.log "SUBSCRIBE NODE" <|
       case config.policy path of
         Data                                     -> (targetPathInput,  True,  False, ElmFire.noOrder)
         Manual                                   -> (targetPathInput,  False, True,  ElmFire.noOrder)
@@ -1016,7 +1017,7 @@ nodeInputOne config feedback mnode =
     path = feedbackPath feedback
 
   in
-    case feedback of
+    case (Debug.log "TREE FEEDBACK" feedback) of
       FromSub _ feedback' ->
         updateTo path (transformFromSub path config.subInput config feedback') mnode
 
