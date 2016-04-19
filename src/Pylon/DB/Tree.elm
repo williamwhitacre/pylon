@@ -313,6 +313,27 @@ childrenSet =
   childrenSet' False
 
 
+childrenClearCancel : Children subtype -> Children subtype
+childrenClearCancel =
+  childrenClear' True
+
+
+childrenClear : Children subtype -> Children subtype
+childrenClear =
+  childrenClear' False
+
+
+childrenClear' : Bool -> Children subtype -> Children subtype
+childrenClear' bDoCancellation childrenStruct =
+  Dict.foldl
+    (\key next -> if bDoCancellation then
+      childrenSetCancel key
+    else
+      childrenSet key Nothing)
+    childrenStruct
+    childrenStruct.next
+
+
 childrenSet' : Bool -> String -> Maybe (TreeNode subtype) -> Children subtype -> Children subtype
 childrenSet' bCancelOnRemove key mnode childrenStruct =
   let
@@ -973,10 +994,16 @@ nodeInputOne config feedback mnode =
         updateTo path (nodeSetAddListener <| Resource.def subs) mnode
 
       ListenAddCancelled _ ->
-        updateTo path (nodeSetAddListener <| Resource.void) mnode
+        updateTo path
+          (nodeSetAddListener (Resource.void)
+          >> nodeChildrenClear)
+          mnode
 
       ListenAddCancelledReset _ ->
-        updateTo path (nodeSetAddListener <| Resource.unknown) mnode
+        updateTo path
+          (nodeSetAddListener (Resource.unknown)
+          >> nodeChildrenClear)
+          mnode
 
       ListenAddError _ error ->
         logErrorAt path error mnode
@@ -985,10 +1012,14 @@ nodeInputOne config feedback mnode =
         updateTo path (nodeSetRemoveListener <| Resource.def subs) mnode
 
       ListenRemoveCancelled _ ->
-        updateTo path (nodeSetRemoveListener <| Resource.void) mnode
+        updateTo path
+          (nodeSetAddListener (Resource.void)
+          >> nodeChildrenClear) mnode
 
       ListenRemoveCancelledReset _ ->
-        updateTo path (nodeSetRemoveListener <| Resource.unknown) mnode
+        updateTo path
+          (nodeSetAddListener (Resource.unknown)
+          >> nodeChildrenClear) mnode
 
       ListenRemoveError _ error ->
         logErrorAt path error mnode
@@ -1109,6 +1140,26 @@ nodeChildrenSet =
   nodeChildrenSet' False
 
 
+nodeChildrenClearCancel : TreeNode subtype -> TreeNode subtype
+nodeChildrenClearCancel mnode =
+  case mnode of
+    Stub _ -> mnode
+    Node meta childrenStruct ->
+      childrenClearCancel childrenStruct
+      |> Node meta
+    Leaf _ _ -> Debug.log "Cannot replace children in leaf node" mnode
+
+
+nodeChildrenClear : TreeNode subtype -> TreeNode subtype
+nodeChildrenClear mnode =
+  case mnode of
+    Stub _ -> mnode
+    Node meta childrenStruct ->
+      childrenClear childrenStruct
+      |> Node meta
+    Leaf _ _ -> Debug.log "Cannot replace children in leaf node" mnode
+
+
 nodeChildrenSet' : Bool -> String -> Maybe (TreeNode subtype) -> TreeNode subtype -> TreeNode subtype
 nodeChildrenSet' bCancelAndReset key mnode' mnode =
   case mnode of
@@ -1214,7 +1265,7 @@ desubscriptionTask_ address onErr onCancel subs =
 --`-------------------------`--
 
 
-{-| -}
+{-| A new empty free. -}
 newTree : Tree subtype
 newTree =
   Tree
@@ -1222,7 +1273,7 @@ newTree =
     }
 
 
-{-| -}
+{-| Cancel at a particular path. -}
 cancel : Context subfeedback -> Config never subtype subfeedback -> Path -> Tree subtype -> (Tree subtype, List (DB.DBTask never))
 cancel context config path tree =
   App.chainSub (\(Tree v) -> v) (\v -> always (Tree v))
@@ -1233,7 +1284,7 @@ cancel context config path tree =
     ] tree
 
 
-{-| -}
+{-| Cancel and reset a particular path. -}
 cancelAndReset : Context subfeedback -> Config never subtype subfeedback -> Path -> Tree subtype -> (Tree subtype, List (DB.DBTask never))
 cancelAndReset context config path tree =
   App.chainSub (\(Tree v) -> v) (\v -> always (Tree v))
