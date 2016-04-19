@@ -47,6 +47,13 @@ module Pylon.DB.Tree
 
   , dbConfig
 
+  , controllerSubscribe
+  , controllerManual
+  , controllerData
+  , controllerSubscribeFrom
+  , controllerManualFrom
+  , controllerDataFrom
+
   , feedbackPath
 
   , newTree
@@ -67,6 +74,9 @@ module Pylon.DB.Tree
 
 # Manipulate Context
 @docs context, contextForward, contextSetRoot, pathContext, contextPath, locationContext, contextLocation, contextPrefixSet, contextPrefixGet
+
+# Controller Policies
+@docs controllerSubscribe, controllerManual, controllerData, controllerSubscribeFrom, controllerManualFrom, controllerDataFrom
 
 # Default Configuration
 @docs dbConfig
@@ -115,6 +125,32 @@ type Controller =
   | AutoRebase Path ElmFire.OrderOptions
   | ManualRebase Path
   | DataRebase Path
+
+
+{-| -}
+controllerSubscribe : ElmFire.OrderOptions -> Controller
+controllerSubscribe = Auto
+
+{-| -}
+controllerManual : Controller
+controllerManual = Manual
+
+{-| -}
+controllerData : Controller
+controllerData = Data
+
+{-| -}
+controllerSubscribeFrom : Path -> ElmFire.OrderOptions -> Controller
+controllerSubscribeFrom = AutoRebase
+
+{-| -}
+controllerManualFrom : Path -> Controller
+controllerManualFrom = ManualRebase
+
+{-| -}
+controllerDataFrom : Path -> Controller
+controllerDataFrom = DataRebase
+
 
 {-| Feedback type for a DB.Tree. -}
 type TreeFeedback subfeedback =
