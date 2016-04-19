@@ -971,14 +971,14 @@ effectPath path feffect mnode =
 
 
 transformFromSub : Path -> (Path -> subfeedback -> subtype -> subtype) -> Config never subtype subfeedback -> subfeedback -> TreeNode subtype -> TreeNode subtype
-transformFromSub path subInput config feedback' mnode =
+transformFromSub path subInput config feedback mnode =
   case mnode of
     Stub meta ->
       config.subInit path
       |> Leaf meta
-      |> transformFromSub path subInput config feedback' -- guaranteed to reach terminating leaf branch below.
+      |> transformFromSub path subInput config feedback -- guaranteed to reach terminating leaf branch below.
     Leaf meta data ->
-      subInput path feedback' data
+      subInput path feedback data
       |> Leaf meta
     Node meta childrenStruct ->
       Debug.log "Recieved subfeedback at a group Path!"
