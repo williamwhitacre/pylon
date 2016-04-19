@@ -587,7 +587,7 @@ nodeCancel_ bCancelAndReset context config path mnode =
 
 nodeSubscribe : Context subfeedback -> Config never subtype subfeedback -> Path -> TreeNode subtype -> (TreeNode subtype, List (DB.DBTask never))
 nodeSubscribe context config path =
-  nodeSubscribe' (pathContext context path) context config path
+  nodeSubscribe' path context config path
 
 
 subscribers_
@@ -659,6 +659,7 @@ nodeSubscribe' targetPathInput context config path mnode =
 
     targetLocation =
       contextLocation (.targetPath <| nodeMetaGet mnode) context
+      |> Debug.log "targetLocation"
 
     targetLocation' =
       contextLocation targetPath' context
