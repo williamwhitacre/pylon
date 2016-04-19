@@ -119,37 +119,37 @@ type alias Listener =
 
 {-| Specifies the controller method to use for a given node. -}
 type Controller =
-  Auto ElmFire.OrderOptions
-  | Manual
-  | Data
-  | AutoRebase Path ElmFire.OrderOptions
-  | ManualRebase Path
-  | DataRebase Path
+  CtlSubscribe ElmFire.OrderOptions
+  | CtlManual
+  | CtlData
+  | CtlSubscribeTarget Path ElmFire.OrderOptions
+  | CtlManualTarget Path
+  | CtlDataTarget Path
 
 
 {-| -}
 controllerSubscribe : ElmFire.OrderOptions -> Controller
-controllerSubscribe = Auto
+controllerSubscribe = CtlSubscribe
 
 {-| -}
 controllerManual : Controller
-controllerManual = Manual
+controllerManual = CtlManual
 
 {-| -}
 controllerData : Controller
-controllerData = Data
+controllerData = CtlData
 
 {-| -}
 controllerSubscribeFrom : Path -> ElmFire.OrderOptions -> Controller
-controllerSubscribeFrom = AutoRebase
+controllerSubscribeFrom = CtlSubscribeTarget
 
 {-| -}
 controllerManualFrom : Path -> Controller
-controllerManualFrom = ManualRebase
+controllerManualFrom = CtlManualTarget
 
 {-| -}
 controllerDataFrom : Path -> Controller
-controllerDataFrom = DataRebase
+controllerDataFrom = CtlDataTarget
 
 
 {-| Feedback type for a DB.Tree. -}
@@ -532,12 +532,12 @@ nodeCancel_ bCancelAndReset context config path mnode =
       getter listener
       |> Resource.therefore
         (\subs ->
-          ( setter Resource.pending listener
+          ( setter (if bCancelAndReset then Resource.unknown else Resource.void) listener
           , [ desubscriptionTask_ context.address tagError tagCancel subs ]
           )
         )
       |> Resource.deriveIf Resource.isPending
-        (\_ -> Resource.def (setter Resource.pending listener, []))
+        (\_ -> Resource.def (setter (if bCancelAndReset then Resource.unknown else Resource.void) listener, []))
       |> Resource.otherwise (listener, [])
 
 
@@ -649,13 +649,13 @@ nodeSubscribe' targetPathInput context config path mnode =
   let
     (targetPath', isData, isManual, orderOptions) =
       case config.policy path of
-        Data                                     -> (targetPathInput,  True,  False, ElmFire.noOrder)
-        Manual                                   -> (targetPathInput,  False, True,  ElmFire.noOrder)
-        Auto orderOptions                        -> (targetPathInput,  False, False, orderOptions)
+        CtlData                                     -> (targetPathInput,  True,  False, ElmFire.noOrder)
+        CtlManual                                   -> (targetPathInput,  False, True,  ElmFire.noOrder)
+        CtlSubscribe orderOptions                        -> (targetPathInput,  False, False, orderOptions)
 
-        DataRebase rebaseTargetPath              -> (rebaseTargetPath, True,  False, ElmFire.noOrder)
-        ManualRebase rebaseTargetPath            -> (rebaseTargetPath, False, True,  ElmFire.noOrder)
-        AutoRebase rebaseTargetPath orderOptions -> (rebaseTargetPath, False, False, orderOptions)
+        CtlDataTarget rebaseTargetPath              -> (rebaseTargetPath, True,  False, ElmFire.noOrder)
+        CtlManualTarget rebaseTargetPath            -> (rebaseTargetPath, False, True,  ElmFire.noOrder)
+        CtlSubscribeTarget rebaseTargetPath orderOptions -> (rebaseTargetPath, False, False, orderOptions)
 
     targetLocation =
       contextLocation (.targetPath <| nodeMetaGet mnode) context
