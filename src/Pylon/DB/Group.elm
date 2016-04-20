@@ -1244,7 +1244,7 @@ flatten pathMerge deepGroup group =
           Dict.foldl
             (\key' _ -> pathMerge key key'
             |> groupRemoveSub)
-            group' (getGroupNextData subGroup)
+            group' (getGroupCurrentData subGroup)
 
         (_, _) -> group'
     ) group deepGroup
