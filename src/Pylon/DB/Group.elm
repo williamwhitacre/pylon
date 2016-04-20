@@ -132,6 +132,8 @@ module Pylon.DB.Group
 
   , flatten
 
+  , commitGroupDeltas
+
   , groupIntegrate
   , groupIntegrate2
   , groupIntegrate3
@@ -183,7 +185,7 @@ thoroughly documented and examples made before we get around to this.
 
 @docs groupInputOne, groupInput, cancelGroup, resetGroup, cancelAndResetGroup, groupIntegrate
 
-# Group Reductions
+# Group Transforms
 
 When dealing with a nested group, it can be quite a boilerplate mess to get things out dynamically.
 It is much easier to do what you want with a flat group. For example. If I have a nested group
@@ -193,8 +195,7 @@ using the `pathMerge` function to control the ordering of the results as well. I
 Mirror to generate a meaningful representation and display it to the user. This can handle a LOT of
 data because everything is a stream of deltas.
 
-@docs flatten
-
+@docs flatten, commitGroupDeltas
 
 # Data Group Operations
 @docs groupDataInputOne, groupDataInput, cancelDataGroup, cancelAndResetDataGroup, groupDataIntegrate
@@ -1209,6 +1210,15 @@ commitGroup cancelSub subscribeSub group =
     group.dataDelta
   -- parallelize subscription and cancellation of sub-items
   |> \(group'', tasks'') -> (group'', App.finalizeTasks App.parallel tasks'')
+
+
+{-| Commit the deltas of a group without using any controller. -}
+commitGroupDeltas : Group subtype -> Group subtype
+commitGroupDeltas =
+  commitGroup
+    (App.asEffector identity)
+    (always <| App.asEffector identity)
+  >> \(group', _) -> group'
 
 
 -- FLATTENING
