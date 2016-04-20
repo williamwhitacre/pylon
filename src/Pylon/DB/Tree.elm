@@ -744,7 +744,7 @@ nodeSubscribe' targetPathInput context config path mnode =
                                             , nodeCancel context config childPath
                                             ] priorChildNode
                                           |> \(cancelledChildNode, tasks') ->
-                                              (childrenSet key (Just cancelledChildNode) childrenStruct_, App.finalizeTasks App.parallel tasks')
+                                              (childrenSet key Nothing childrenStruct_, App.finalizeTasks App.parallel tasks')
                                         else
                                           (childrenStruct_, tasks)
                                       ) prior
