@@ -1227,7 +1227,7 @@ flatten : (String -> String -> String) -> Group (Group subtype) -> Group subtype
 flatten pathMerge deepGroup group =
   groupResDeltaFoldL
     (\key subPair group' ->
-      case Debug.log "FLATTEN SUBPAIR" subPair of
+      case subPair of
         (Resource.Known _, Resource.Known subGroup) ->
           groupResDeltaFoldL
             (\key' subSubPair ->
@@ -1242,7 +1242,7 @@ flatten pathMerge deepGroup group =
 
         (Resource.Known subGroup, _) ->
           Dict.foldl
-            (\key' _ -> pathMerge key key'
+            (\key' _ -> pathMerge key (Debug.log "FLATTEN REMOVING" key')
             |> groupRemoveSub)
             group' (getGroupCurrentData subGroup)
 
