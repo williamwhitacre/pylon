@@ -40,7 +40,9 @@ module Pylon.DB.Mirror
   , attach
   , attachSynch, attachFilterSynch
   , attachDelta, attachFilterDelta
+
   , forward
+  , filterForward
 
   , inject
   , commit
@@ -65,7 +67,7 @@ module Pylon.DB.Mirror
 @docs refs, changedRefs, deltas
 
 # Mirroring
-@docs refresh, resynch, attach, attachSynch, attachDelta, attachFilterSynch, attachFilterDelta, forward
+@docs refresh, resynch, attach, attachSynch, attachDelta, attachFilterSynch, attachFilterDelta, forward, filterForward
 
 # Control
 @docs inject, commit
@@ -208,6 +210,26 @@ forward : (String -> doctype -> doctype') -> Mirror doctype -> Mirror doctype' -
 forward mirror (MirrorState sourceState as sourceShell) (MirrorState priorState as priorShell) =
   let
     toDoc key = Resource.therefore (mirror key)
+    docPair key (prior, current) = (toDoc key prior, toDoc key current)
+
+  in
+    Dict.foldr
+      (\key -> flip (List.foldr (docPair key >> mirrorDelta__ key)))
+      priorShell
+      sourceState.deltas
+
+
+{-| Forward deltas from one mirror to another selectively by using a filter. -}
+filterForward : (String -> doctype -> Maybe doctype') -> Mirror doctype -> Mirror doctype' -> Mirror doctype'
+filterForward filterMirror (MirrorState sourceState as sourceShell) (MirrorState priorState as priorShell) =
+  let
+    toDoc key =
+      Resource.therefore
+        (filterMirror key
+        >> Maybe.map Resource.def
+        >> Maybe.withDefault Resource.void)
+      >> Resource.otherwise Resource.void
+
     docPair key (prior, current) = (toDoc key prior, toDoc key current)
 
   in
