@@ -32,6 +32,7 @@ module Pylon.DB.Mirror
   , mirror
 
   , refs
+  , getRef
   , changedRefs
   , deltas
 
@@ -43,6 +44,8 @@ module Pylon.DB.Mirror
 
   , forward
   , filterForward
+  , sort
+  , filterSort
 
   , inject
   , commit
@@ -64,10 +67,13 @@ module Pylon.DB.Mirror
 @docs mirror
 
 # Getters
-@docs refs, changedRefs, deltas
+@docs getRef, refs, changedRefs, deltas
 
 # Mirroring
-@docs refresh, resynch, attach, attachSynch, attachDelta, attachFilterSynch, attachFilterDelta, forward, filterForward
+@docs refresh, resynch, attach, attachSynch, attachDelta, attachFilterSynch, attachFilterDelta
+
+# Dataflow
+@docs forward, filterForward, sort, filterSort
 
 # Control
 @docs inject, commit
@@ -118,16 +124,32 @@ mirror =
   MirrorState newState__
 
 
-{-| Get the current reference dictionary. -}
+{-| Get the current working reference dictionary. -}
 refs : Mirror doctype -> Dict String doctype
 refs (MirrorState priorState) =
   priorState.resultRefs
+
+
+{-| Get the current working reference at a particular key. -}
+getRef : String -> Mirror doctype -> Resource DB.DBError doctype
+getRef key (MirrorState priorState) =
+  Dict.get key priorState.resultRefs
+  |> Maybe.map Resource.def
+  |> Maybe.withDefault Resource.void
 
 
 {-| Get the pending reference dictionary. -}
 changedRefs : Mirror doctype -> Dict String doctype
 changedRefs (MirrorState priorState) =
   priorState.resultRefs_
+
+
+{-| Get the pending reference at a particular key. -}
+getChangedRef : String -> Mirror doctype -> Resource DB.DBError doctype
+getChangedRef key (MirrorState priorState) =
+  Dict.get key priorState.resultRefs_
+  |> Maybe.map Resource.def
+  |> Maybe.withDefault Resource.void
 
 
 {-| Get the deltas used to change the reference dictionary. -}
@@ -169,9 +191,7 @@ are not derived from some DB.Group. -}
 inject : String -> Resource DB.DBError doctype -> Mirror doctype -> Mirror doctype
 inject key docResource priorShell =
   mirrorDelta__ key
-    ( Dict.get key (changedRefs priorShell)
-      |> Maybe.map Resource.def
-      |> Maybe.withDefault Resource.void
+    ( getChangedRef key priorShell
     , docResource
     ) priorShell
 
@@ -237,6 +257,73 @@ filterForward filterMirror (MirrorState sourceState as sourceShell) (MirrorState
       (\key -> flip (List.foldr (docPair key >> mirrorDelta__ key)))
       priorShell
       sourceState.deltas
+
+
+{-| Sort the documents in a mirror in to buckets. -}
+sort : (String -> doctype -> String) -> Mirror doctype -> Mirror (Mirror doctype) -> Mirror (Mirror doctype)
+sort fsort =
+  filterSort (\key -> fsort key >> Just)
+
+
+{-| Sort the documents in a mirror in to buckets, ignoring the items whose key/document pairs yield
+Nothing. If fsort produces `Just key'`, then the document will be placed in to the mirror represeting
+the bucket at `key'`. -}
+filterSort : (String -> doctype -> Maybe String) -> Mirror doctype -> Mirror (Mirror doctype) -> Mirror (Mirror doctype)
+filterSort fsort (MirrorState sourceState as sourceShell) (MirrorState priorState as priorShell) =
+  Dict.foldr
+    (\key deltas shell ->
+      List.foldr
+        (\(prior, next) ->
+          let
+            bucketKeyOf =
+              Resource.therefore (fsort key) >> Resource.otherwise Nothing
+
+            priorBucketKey = bucketKeyOf prior
+            nextBucketKey = bucketKeyOf next
+
+            -- : Mirror (Mirror (doctype))
+            removeFromPriorBucket =
+              if priorBucketKey /= nextBucketKey then
+                -- only do it if we are changing buckets, otherwise we will emit
+                -- unneccsary deltas.
+                case priorBucketKey of
+                  Nothing -> identity
+                  Just priorKey -> \shell_ ->
+                    let
+                      priorKeyBucket = getChangedRef priorKey shell_
+
+                    in
+                      if Resource.isKnown priorKeyBucket then
+                        inject
+                          priorKey
+                          (Resource.therefore (inject key Resource.void) priorKeyBucket)
+                          shell_
+                      else
+                        shell_
+              else
+                identity
+
+            -- : Resource DBError doctype -> Mirror (Mirror (doctype))
+            editNextBucket res =
+              case nextBucketKey of
+                Nothing -> identity
+                Just nextKey -> \shell_ ->
+                  let
+                    nextKeyBucket = getChangedRef nextKey shell_
+
+                  in
+                    if Resource.isKnown nextKeyBucket then
+                      inject
+                        nextKey
+                        (Resource.therefore (inject key res) nextKeyBucket)
+                        shell_
+                    else
+                      shell_
+          in
+            removeFromPriorBucket
+            >> editNextBucket next
+          ) shell deltas
+    ) priorShell sourceState.deltas
 
 
 {-|  -}
