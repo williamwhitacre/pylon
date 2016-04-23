@@ -293,6 +293,8 @@ function will result in a list of strings. If the list is empty the document is 
 is not empty, then the given document will be mirrored in the bucket mirrors at the given keys. -}
 multiSort : (String -> doctype -> List String) -> Mirror doctype -> Mirror (Mirror doctype) -> Mirror (Mirror doctype)
 multiSort fsort (MirrorState sourceState as sourceShell) (MirrorState priorState as priorShell) =
+  Debug.log "multiSort debug - prior state is" priorState |> \_ ->
+  Debug.log "multiSort debug - source deltas are" sourceState.deltas |> \_ ->
   Dict.foldr
     (\key ->
       let
@@ -343,6 +345,7 @@ multiSort fsort (MirrorState sourceState as sourceShell) (MirrorState priorState
             >> editNextBuckets next (bucketKeysOf next)
           )
     ) priorShell sourceState.deltas
+  |> Debug.log "multiSort debug - new state is"
 
 
 {-|  -}
