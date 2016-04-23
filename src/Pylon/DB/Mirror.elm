@@ -298,6 +298,7 @@ multiSort fsort (MirrorState sourceState as sourceShell) (MirrorState priorState
       let
         -- : Mirror (Mirror (doctype))
         removeFromPriorBucket priorKey shell_ =
+          Debug.log "multiSort debug - removing from prior bucket at key" priorKey |> \_ ->
           let priorKeyBucket = getChangedRef priorKey shell_ in
             if Resource.isKnown priorKeyBucket then
               let
@@ -323,6 +324,7 @@ multiSort fsort (MirrorState sourceState as sourceShell) (MirrorState priorState
 
         -- : Resource DBError doctype -> Mirror (Mirror (doctype))
         editNextBucket res nextKey shell_ =
+          Debug.log "multiSort debug - editing next bucket with (resource, key)" (res, nextKey) |> \_ ->
           let nextKeyBucket = getChangedRef nextKey shell_ in
             inject
               nextKey
