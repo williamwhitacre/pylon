@@ -293,14 +293,11 @@ function will result in a list of strings. If the list is empty the document is 
 is not empty, then the given document will be mirrored in the bucket mirrors at the given keys. -}
 multiSort : (String -> doctype -> List String) -> Mirror doctype -> Mirror (Mirror doctype) -> Mirror (Mirror doctype)
 multiSort fsort (MirrorState sourceState as sourceShell) (MirrorState priorState as priorShell) =
-  Debug.log "multiSort debug - prior state is" priorState |> \_ ->
-  Debug.log "multiSort debug - source deltas are" sourceState.deltas |> \_ ->
   Dict.foldr
     (\key ->
       let
         -- : Mirror (Mirror (doctype))
         removeFromPriorBucket priorKey shell_ =
-          Debug.log "multiSort debug - removing from prior bucket at key" priorKey |> \_ ->
           let priorKeyBucket = getChangedRef priorKey shell_ in
             if Resource.isKnown priorKeyBucket then
               let
@@ -326,7 +323,6 @@ multiSort fsort (MirrorState sourceState as sourceShell) (MirrorState priorState
 
         -- : Resource DBError doctype -> Mirror (Mirror (doctype))
         editNextBucket res nextKey shell_ =
-          Debug.log "multiSort debug - editing next bucket with (resource, key)" (res, nextKey) |> \_ ->
           if Resource.isKnown res then
             let
               nextKeyBucket =
@@ -337,7 +333,6 @@ multiSort fsort (MirrorState sourceState as sourceShell) (MirrorState priorState
                 nextKey
                 (Resource.def <| inject key res nextKeyBucket)
                 shell_
-              |> Debug.log "multiSort debug - edited next bucket, yielding"
           else
             shell_
 
@@ -353,7 +348,6 @@ multiSort fsort (MirrorState sourceState as sourceShell) (MirrorState priorState
             >> editNextBuckets next (bucketKeysOf next)
           )
     ) priorShell sourceState.deltas
-  |> Debug.log "multiSort debug - new state is"
 
 
 {-|  -}

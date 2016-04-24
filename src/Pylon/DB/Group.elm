@@ -1252,7 +1252,7 @@ flatten pathMerge deepGroup group =
 
         (Resource.Known subGroup, _) ->
           Dict.foldl
-            (\key' _ -> pathMerge key (Debug.log "FLATTEN REMOVING" key')
+            (\key' _ -> pathMerge key key'
             |> groupRemoveSub)
             group' (getGroupCurrentData subGroup)
 
