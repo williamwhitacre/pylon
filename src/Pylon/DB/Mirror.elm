@@ -271,7 +271,7 @@ forwardPast : (String -> doctype -> Maybe doctype' -> Maybe doctype') -> Mirror 
 forwardPast pastMirror (MirrorState sourceState as sourceShell) (MirrorState priorState as priorShell) =
   let
     toDoc key prevOutput res =
-      Debug.log "Mirror debug - toDoc - (key, prevOutput, resource)" (key, prevOutput, res) |> \_ ->
+      --Debug.log "Mirror debug - toDoc - (key, prevOutput, resource)" (key, prevOutput, res) |> \_ ->
       Resource.therefore
         (flip (pastMirror key) prevOutput
         >> Maybe.map Resource.def
@@ -280,8 +280,8 @@ forwardPast pastMirror (MirrorState sourceState as sourceShell) (MirrorState pri
       |> Resource.otherwise Resource.void
 
   in
-    Debug.log "Mirror debug - forwardPast - prior state" priorState |> \_ ->
-    Debug.log "Mirror debug - forwardPast - source state" sourceState |> \_ ->
+    --Debug.log "Mirror debug - forwardPast - prior state" priorState |> \_ ->
+    --Debug.log "Mirror debug - forwardPast - source state" sourceState |> \_ ->
     Dict.foldr
       (\key pairs shell' ->
         List.foldr
@@ -289,7 +289,7 @@ forwardPast pastMirror (MirrorState sourceState as sourceShell) (MirrorState pri
             getChangedRef key shell_
             |> Resource.therefore Just
             |> Resource.otherwise Nothing
-            |> Debug.log "Mirror debug - forwardPast - changedRef"
+            --|> Debug.log "Mirror debug - forwardPast - changedRef"
             |> flip (toDoc key) next
             |> flip (inject key) shell_
           )
@@ -298,7 +298,7 @@ forwardPast pastMirror (MirrorState sourceState as sourceShell) (MirrorState pri
       )
       priorShell
       sourceState.deltas
-    |> Debug.log "Mirror debug - forwardPast - next state"
+    --|> Debug.log "Mirror debug - forwardPast - next state"
 
 
 {-| Forward deltas from one mirror to another selectively by using a filter. -}
