@@ -332,6 +332,7 @@ multiSort fsort (MirrorState sourceState as sourceShell) (MirrorState priorState
               nextKey
               (Resource.therefore (inject key res) nextKeyBucket)
               shell_
+            |> Debug.log "multiSort debug - edited next bucket, yielding"
 
         removeFromPriorBuckets = flip <| List.foldl removeFromPriorBucket
         editNextBuckets res    = flip <| List.foldl (editNextBucket res)
