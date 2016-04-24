@@ -289,6 +289,7 @@ forwardPast pastMirror (MirrorState sourceState as sourceShell) (MirrorState pri
             getChangedRef key shell_
             |> Resource.therefore Just
             |> Resource.otherwise Nothing
+            |> Debug.log "Mirror debug - forwardPast - changedRef"
             |> flip (toDoc key) next
             |> flip (inject key) shell_
           )
