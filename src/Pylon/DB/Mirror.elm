@@ -45,6 +45,7 @@ module Pylon.DB.Mirror
   , attachDelta, attachFilterDelta
 
   , forward
+  , forwardPast
   , filterForward
   , sort
   , filterSort
@@ -76,7 +77,7 @@ module Pylon.DB.Mirror
 @docs refresh, resynch, attach, attachSynch, attachDelta, attachFilterSynch, attachFilterDelta
 
 # Dataflow
-@docs forward, filterForward, sort, filterSort, multiSort
+@docs forward, forwardPast, filterForward, sort, filterSort, multiSort
 
 # Control
 @docs inject, commit
@@ -250,6 +251,37 @@ forward mirror (MirrorState sourceState as sourceShell) (MirrorState priorState 
   in
     Dict.foldr
       (\key -> flip (List.foldr (docPair key >> mirrorDelta__ key)))
+      priorShell
+      sourceState.deltas
+
+
+{-| Forward deltas, accounting for the previous output for the same key. This allows something
+conceptually similar to folding in to the past of the output mirror, so unlike forward and sort, it
+represents a user defined stateful update of the output mirror. -}
+forwardPast : (String -> doctype -> Maybe doctype' -> Maybe doctype') -> Mirror doctype -> Mirror doctype' -> Mirror doctype'
+forwardPast pastMirror (MirrorState sourceState as sourceShell) (MirrorState priorState as priorShell) =
+  let
+    toDoc key prevOutput =
+      Resource.therefore
+        (flip (pastMirror key) prevOutput
+        >> Maybe.map Resource.def
+        >> Maybe.withDefault Resource.void)
+      >> Resource.otherwise Resource.void
+
+  in
+    Dict.foldr
+      (\key pairs shell' ->
+        List.foldr
+          (\(_, next) shell_ ->
+            getChangedRef key shell_
+            |> Resource.therefore Just
+            |> Resource.otherwise Nothing
+            |> flip (toDoc key) next
+            |> flip (inject key) shell_
+          )
+          shell'
+          pairs
+      )
       priorShell
       sourceState.deltas
 
