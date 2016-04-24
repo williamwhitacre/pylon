@@ -327,12 +327,19 @@ multiSort fsort (MirrorState sourceState as sourceShell) (MirrorState priorState
         -- : Resource DBError doctype -> Mirror (Mirror (doctype))
         editNextBucket res nextKey shell_ =
           Debug.log "multiSort debug - editing next bucket with (resource, key)" (res, nextKey) |> \_ ->
-          let nextKeyBucket = getChangedRef nextKey shell_ in
-            inject
-              nextKey
-              (Resource.therefore (inject key res) nextKeyBucket)
-              shell_
-            |> Debug.log "multiSort debug - edited next bucket, yielding"
+          if Resource.isKnown res then
+            let
+              nextKeyBucket =
+                getChangedRef nextKey shell_
+                |> Resource.otherwise mirror
+            in
+              inject
+                nextKey
+                (Resource.def <| inject key res nextKeyBucket)
+                shell_
+              |> Debug.log "multiSort debug - edited next bucket, yielding"
+          else
+            shell_
 
         removeFromPriorBuckets = flip <| List.foldl removeFromPriorBucket
         editNextBuckets res    = flip <| List.foldl (editNextBucket res)
