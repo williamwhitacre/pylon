@@ -270,12 +270,14 @@ represents a user defined stateful update of the output mirror. -}
 forwardPast : (String -> doctype -> Maybe doctype' -> Maybe doctype') -> Mirror doctype -> Mirror doctype' -> Mirror doctype'
 forwardPast pastMirror (MirrorState sourceState as sourceShell) (MirrorState priorState as priorShell) =
   let
-    toDoc key prevOutput =
+    toDoc key prevOutput res =
+      Debug.log "Mirror debug - toDoc - (key, prevOutput, resource)" (key, prevOutput, res) |> \_ ->
       Resource.therefore
         (flip (pastMirror key) prevOutput
         >> Maybe.map Resource.def
         >> Maybe.withDefault Resource.void)
-      >> Resource.otherwise Resource.void
+        res
+      |> Resource.otherwise Resource.void
 
   in
     Debug.log "Mirror debug - forwardPast - prior state" priorState |> \_ ->
