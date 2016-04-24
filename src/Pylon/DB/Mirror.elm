@@ -278,6 +278,8 @@ forwardPast pastMirror (MirrorState sourceState as sourceShell) (MirrorState pri
       >> Resource.otherwise Resource.void
 
   in
+    Debug.log "Mirror debug - forwardPast - prior state" priorState |> \_ ->
+    Debug.log "Mirror debug - forwardPast - source state" sourceState |> \_ ->
     Dict.foldr
       (\key pairs shell' ->
         List.foldr
@@ -293,6 +295,7 @@ forwardPast pastMirror (MirrorState sourceState as sourceShell) (MirrorState pri
       )
       priorShell
       sourceState.deltas
+    |> Debug.log "Mirror debug - forwardPast - next state"
 
 
 {-| Forward deltas from one mirror to another selectively by using a filter. -}
