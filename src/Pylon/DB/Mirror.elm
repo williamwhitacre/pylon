@@ -38,11 +38,14 @@ module Pylon.DB.Mirror
   , isEmpty
   , isChangedEmpty
 
+  , each
   , refresh
   , resynch
   , attach
-  , attachSynch, attachFilterSynch
-  , attachDelta, attachFilterDelta
+  , attachSynch
+  , attachFilterSynch
+  , attachDelta
+  , attachFilterDelta
 
   , forward
   , forwardPast
@@ -74,7 +77,7 @@ module Pylon.DB.Mirror
 @docs getRef, refs, changedRefs, deltas, isEmpty, isChangedEmpty
 
 # Mirroring
-@docs refresh, resynch, attach, attachSynch, attachDelta, attachFilterSynch, attachFilterDelta
+@docs each, refresh, resynch, attach, attachSynch, attachDelta, attachFilterSynch, attachFilterDelta
 
 # Dataflow
 @docs forward, forwardPast, filterForward, sort, filterSort, multiSort
@@ -191,6 +194,12 @@ group that uses this mirror as a controller by deltas will be brought up to date
 resynch : Mirror doctype -> Mirror doctype
 resynch (MirrorState priorState as priorShell) =
   Dict.foldr (\key -> Resource.def >> inject key) priorShell priorState.resultRefs_
+
+
+{-| Do something to each member of a mirror. Useful for acting on nested mirrors, for example, deep resynch. -}
+each : (doctype -> doctype) -> Mirror doctype -> Mirror doctype
+each xdcr (MirrorState priorState as priorShell) =
+  Dict.foldr (\key -> xdcr >> Resource.def >> inject key) priorShell priorState.resultRefs_
 
 
 {-| Accept the current changes. -}
