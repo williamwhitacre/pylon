@@ -33,6 +33,7 @@ module Pylon.DB.Mirror
 
   , refs
   , getRef
+  , getChangedRef
   , changedRefs
   , deltas
   , isEmpty
@@ -74,7 +75,7 @@ module Pylon.DB.Mirror
 @docs mirror
 
 # Getters
-@docs getRef, refs, changedRefs, deltas, isEmpty, isChangedEmpty
+@docs getRef, getChangedRef, refs, changedRefs, deltas, isEmpty, isChangedEmpty
 
 # Mirroring
 @docs each, refresh, resynch, attach, attachSynch, attachDelta, attachFilterSynch, attachFilterDelta
