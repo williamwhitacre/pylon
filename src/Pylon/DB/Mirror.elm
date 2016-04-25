@@ -392,8 +392,8 @@ multiSort fsort (MirrorState sourceState as sourceShell) (MirrorState priorState
       in
         flip <| List.foldr
           (\(prior, next) ->
-            removeFromPriorBuckets (bucketKeysOf prior)
-            >> editNextBuckets next (bucketKeysOf next)
+            removeFromPriorBuckets (Debug.log "bucketKeysOf prior =" <| bucketKeysOf prior)
+            >> editNextBuckets next (Debug.log "bucketKeysOf next =" <| bucketKeysOf next)
           )
     ) priorShell sourceState.deltas
 
