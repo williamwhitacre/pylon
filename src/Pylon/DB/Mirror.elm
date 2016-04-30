@@ -40,6 +40,7 @@ module Pylon.DB.Mirror
   , isChangedEmpty
 
   , each
+  , eachDelta
   , refresh
   , resynch
   , attach
@@ -80,7 +81,7 @@ module Pylon.DB.Mirror
 @docs getRef, getChangedRef, refs, changedRefs, deltas, isEmpty, isChangedEmpty
 
 # Mirroring
-@docs each, refresh, resynch, attach, attachSynch, attachDelta, attachFilterSynch, attachFilterDelta
+@docs each, eachDelta, refresh, resynch, attach, attachSynch, attachDelta, attachFilterSynch, attachFilterDelta
 
 # Dataflow
 @docs forward, forwardPast, filterForward, sort, filterSort, multiSort, flatten
