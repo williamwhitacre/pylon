@@ -419,21 +419,19 @@ commitSorted (MirrorState priorState as priorShell) =
     eachDelta commit priorShell
 
 
-{-| Flatten a sorted mirror `Mirror (Mirror doctype)`. There are two policy functions:
+{-| Flatten a sorted mirror `Mirror (Mirror doctype)`. This takes a policy function
 
-1. fDeltaFlatten bucketKey subKey maybeItem flatItem =
-2. fEmpty bucketKey =
+    fDeltaFlatten bucketKey subKey maybeItem maybeTarget =
 
 where fDeltaFlatten specifies how to modify the flattened item when a key is removed or added and
 fEmpty initializes an item corresponding to a new key in the output mirror.
 -}
 flatten
-  :  (String -> String -> Maybe doctype -> doctype' -> doctype')
-  -> (String -> doctype')
+  :  (String -> String -> Maybe doctype -> Maybe doctype' -> Maybe doctype')
   -> Mirror (Mirror doctype)
   -> Mirror doctype'
   -> Mirror doctype'
-flatten fDeltaFlatten fEmpty (MirrorState sortedState as sortedShell) (MirrorState priorState as priorShell) =
+flatten fDeltaFlatten (MirrorState sortedState as sortedShell) (MirrorState priorState as priorShell) =
   Dict.foldr
     (\key ->
       flip <| List.foldr
@@ -445,13 +443,15 @@ flatten fDeltaFlatten fEmpty (MirrorState sortedState as sortedShell) (MirrorSta
                   flip <| List.foldr
                     (\(_, next) shell' ->
                       inject key
-                        (Resource.def <| fDeltaFlatten key key'
+                        (fDeltaFlatten key key'
                           (Resource.therefore Just next
                           |> Resource.otherwise Nothing)
 
                           (getChangedRef key shell'
-                          |> Resource.otherwise (fEmpty key))
-                        ) shell'
+                          |> Resource.therefore Just
+                          |> Resource.otherwise Nothing)
+                        |> Maybe.map Resource.def
+                        |> Maybe.withDefault Resource.void) shell'
                     )
                 ) shell bucket.deltas
 

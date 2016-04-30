@@ -1,5 +1,5 @@
 {
-    "version": "8.10.0",
+    "version": "9.0.0",
     "summary": "Pylon is a support library for Firebase applications using ElmFire.",
     "repository": "https://github.com/williamwhitacre/pylon.git",
     "license": "BSD3",
@@ -11,7 +11,6 @@
         "Pylon.App",
         "Pylon.DB",
         "Pylon.DB.Path",
-        "Pylon.DB.Tree",
         "Pylon.DB.Group",
         "Pylon.DB.Meta",
         "Pylon.DB.Filter",

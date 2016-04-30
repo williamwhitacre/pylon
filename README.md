@@ -1,8 +1,6 @@
 # Pylon
 
-## Update
-
-NOTE: `Pylon.Tree` does not work yet, don't use it!
+## Update (30APR2016)
 
 Pylon is currently growing rapidly and organically to facilitate completion of our project on time.
 Some good, bad, and ugly is present, but overall the foundation is much better and cleaner than
@@ -27,6 +25,7 @@ manipulation of the `Record`.
 
 More news on the development of this system later. There should be a single commit by mid to late May.
 
+**NOTE :** Pylon.Tree has been removed. 
 
 ## Initial Commit Readme
 
