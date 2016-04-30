@@ -54,9 +54,11 @@ module Pylon.DB.Mirror
   , sort
   , filterSort
   , multiSort
+  , flatten
 
   , inject
   , commit
+  , commitSorted
 
   , bindMirror
   , bindMirrorRaw
@@ -81,10 +83,10 @@ module Pylon.DB.Mirror
 @docs each, refresh, resynch, attach, attachSynch, attachDelta, attachFilterSynch, attachFilterDelta
 
 # Dataflow
-@docs forward, forwardPast, filterForward, sort, filterSort, multiSort
+@docs forward, forwardPast, filterForward, sort, filterSort, multiSort, flatten
 
 # Control
-@docs inject, commit
+@docs inject, commit, commitSorted
 
 # Group Binding
 @docs bindMirror, bindMirrorRaw, groupMirror, groupMirror, groupMirrorSynch, dataGroupMirror, dataGroupMirrorSynch
@@ -201,6 +203,15 @@ resynch (MirrorState priorState as priorShell) =
 each : (doctype -> doctype) -> Mirror doctype -> Mirror doctype
 each xdcr (MirrorState priorState as priorShell) =
   Dict.foldr (\key -> xdcr >> Resource.def >> inject key) priorShell priorState.resultRefs_
+
+
+{-| Do something to each member of a mirror that has changed. Useful for acting on nested mirrors, for example, commiting a sorted mirror. -}
+eachDelta : (doctype -> doctype) -> Mirror doctype -> Mirror doctype
+eachDelta xdcr (MirrorState priorState as priorShell) =
+  Dict.foldr
+    (\key ->
+      flip <| List.foldr (\(_, next) -> inject key <| Resource.therefore xdcr next)
+    ) priorShell priorState.deltas
 
 
 {-| Accept the current changes. -}
@@ -396,6 +407,59 @@ multiSort fsort (MirrorState sourceState as sourceShell) (MirrorState priorState
             >> editNextBuckets next (bucketKeysOf next)
           )
     ) priorShell sourceState.deltas
+
+
+{-| Accept the current changes recursively in a mirror of type `Mirror (Mirror doctype)`. -}
+commitSorted : Mirror (Mirror doctype) -> Mirror (Mirror doctype)
+commitSorted (MirrorState priorState as priorShell) =
+  if Dict.isEmpty priorState.deltas then
+    priorShell
+  else
+    eachDelta commit priorShell
+
+
+{-| Flatten a sorted mirror `Mirror (Mirror doctype)`. There are two policy functions:
+
+1. fDeltaFlatten bucketKey subKey maybeItem flatItem =
+2. fEmpty bucketKey =
+
+where fDeltaFlatten specifies how to modify the flattened item when a key is removed or added and
+fEmpty initializes an item corresponding to a new key in the output mirror.
+-}
+flatten
+  :  (String -> String -> Maybe doctype -> doctype' -> doctype')
+  -> (String -> doctype')
+  -> Mirror (Mirror doctype)
+  -> Mirror doctype'
+  -> Mirror doctype'
+flatten fDeltaFlatten fEmpty (MirrorState sortedState as sortedShell) (MirrorState priorState as priorShell) =
+  Dict.foldr
+    (\key ->
+      flip <| List.foldr
+        (\(_, nextBucketRes) shell ->
+          case nextBucketRes of
+            Resource.Known (MirrorState bucket) ->
+              Dict.foldr
+                (\key' ->
+                  flip <| List.foldr
+                    (\(_, next) shell' ->
+                      inject key
+                        (Resource.def <| fDeltaFlatten key key'
+                          (Resource.therefore Just next
+                          |> Resource.otherwise Nothing)
+
+                          (getChangedRef key shell'
+                          |> Resource.otherwise (fEmpty key))
+                        ) shell'
+                    )
+                ) shell bucket.deltas
+
+            _ ->
+              inject key Resource.void shell
+        )
+    )
+    priorShell
+    sortedState.deltas
 
 
 {-|  -}
